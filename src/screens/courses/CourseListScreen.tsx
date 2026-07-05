@@ -72,7 +72,11 @@ export default function CourseListScreen({ navigation }: Props) {
             </View>
           }
           renderItem={({ item, index }) => (
-            <CourseCard course={item} index={index} />
+            <CourseCard
+              course={item}
+              index={index}
+              onPress={() => navigation.navigate('Course', { courseId: item.id, courseName: item.name })}
+            />
           )}
         />
       )}

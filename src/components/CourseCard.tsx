@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, Pressable } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -19,9 +19,10 @@ interface Course {
 interface Props {
   course: Course;
   index: number;
+  onPress?: () => void;
 }
 
-export function CourseCard({ course, index }: Props) {
+export function CourseCard({ course, index, onPress }: Props) {
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(16);
   const reduceMotion = useReducedMotion();
@@ -41,19 +42,21 @@ export function CourseCard({ course, index }: Props) {
   }));
 
   return (
-    <Animated.View style={[styles.card, animStyle]}>
-      <Text style={styles.name}>{course.name}</Text>
-      {course.description ? (
-        <Text style={styles.description}>{course.description}</Text>
-      ) : null}
-      <Text style={styles.date}>
-        {new Date(course.created_at).toLocaleDateString('sv-SE', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-        })}
-      </Text>
-    </Animated.View>
+    <Pressable onPress={onPress} disabled={!onPress}>
+      <Animated.View style={[styles.card, animStyle]}>
+        <Text style={styles.name}>{course.name}</Text>
+        {course.description ? (
+          <Text style={styles.description}>{course.description}</Text>
+        ) : null}
+        <Text style={styles.date}>
+          {new Date(course.created_at).toLocaleDateString('sv-SE', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+          })}
+        </Text>
+      </Animated.View>
+    </Pressable>
   );
 }
 
