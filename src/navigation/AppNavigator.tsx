@@ -13,6 +13,7 @@ import ReviewScreen from '../screens/review/ReviewScreen';
 import ReviewCompleteScreen from '../screens/review/ReviewCompleteScreen';
 import QuizScreen from '../screens/quiz/QuizScreen';
 import QuizResultScreen from '../screens/quiz/QuizResultScreen';
+import MindmapScreen from '../screens/mindmap/MindmapScreen';
 import { colors, fontFamily } from '../theme/tokens';
 
 export type AuthStackParamList = {
@@ -29,6 +30,7 @@ export type AppStackParamList = {
   ReviewComplete: { count: number; streakDays: number };
   Quiz: { courseId: string; courseName: string };
   QuizResult: { score: number; total: number; courseId: string; courseName: string };
+  Mindmap: { courseId: string; courseName: string; documentId?: string };
 };
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -69,6 +71,7 @@ function MainNavigator() {
       <AppStack.Screen name="ReviewComplete" component={ReviewCompleteScreen} options={{ headerShown: false }} />
       <AppStack.Screen name="Quiz" component={QuizScreen} options={{ headerShown: false }} />
       <AppStack.Screen name="QuizResult" component={QuizResultScreen} options={{ headerShown: false }} />
+      <AppStack.Screen name="Mindmap" component={MindmapScreen} options={{ title: 'Tankekarta' }} />
     </AppStack.Navigator>
   );
 }

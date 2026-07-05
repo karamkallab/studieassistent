@@ -97,6 +97,11 @@ export default function CourseScreen({ route, navigation }: Props) {
             variant="ghost"
           />
         )}
+        <PrimaryButton
+          label="Visa tankekarta"
+          onPress={() => navigation.navigate('Mindmap', { courseId, courseName })}
+          variant="ghost"
+        />
       </View>
 
       {loading ? (

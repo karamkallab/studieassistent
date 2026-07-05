@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, ActivityIndicator } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFonts } from 'expo-font';
 import { Fraunces_400Regular, Fraunces_700Bold } from '@expo-google-fonts/fraunces';
 import { Inter_400Regular, Inter_600SemiBold } from '@expo-google-fonts/inter';
@@ -27,8 +28,10 @@ export default function App() {
   }
 
   return (
-    <AuthProvider>
-      <RootNavigator />
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <RootNavigator />
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }
