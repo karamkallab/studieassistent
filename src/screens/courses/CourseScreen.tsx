@@ -30,6 +30,7 @@ export default function CourseScreen({ route, navigation }: Props) {
   const { courseId, courseName } = route.params;
   const { user } = useAuth();
   const [cards, setCards] = useState<Flashcard[]>([]);
+  const [quizCount, setQuizCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [dueCount, setDueCount] = useState(0);
 
@@ -48,6 +49,14 @@ export default function CourseScreen({ route, navigation }: Props) {
       setCards(all);
       setDueCount(all.filter((c) => new Date(c.next_review_at) <= new Date()).length);
     }
+
+    const { count } = await supabase
+      .from('quiz_questions')
+      .select('id', { count: 'exact', head: true })
+      .eq('course_id', courseId)
+      .eq('user_id', user!.id);
+    setQuizCount(count ?? 0);
+
     setLoading(false);
   };
 
@@ -80,6 +89,13 @@ export default function CourseScreen({ route, navigation }: Props) {
         )}
         {dueCount === 0 && cards.length > 0 && (
           <Text style={styles.doneText}>Inga kort att repetera idag</Text>
+        )}
+        {quizCount > 0 && (
+          <PrimaryButton
+            label={`Starta quiz  (${quizCount} frågor)`}
+            onPress={() => navigation.navigate('Quiz', { courseId, courseName })}
+            variant="ghost"
+          />
         )}
       </View>
 

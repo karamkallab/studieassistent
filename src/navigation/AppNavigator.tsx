@@ -11,6 +11,8 @@ import CourseScreen from '../screens/courses/CourseScreen';
 import CreateFlashcardScreen from '../screens/flashcards/CreateFlashcardScreen';
 import ReviewScreen from '../screens/review/ReviewScreen';
 import ReviewCompleteScreen from '../screens/review/ReviewCompleteScreen';
+import QuizScreen from '../screens/quiz/QuizScreen';
+import QuizResultScreen from '../screens/quiz/QuizResultScreen';
 import { colors, fontFamily } from '../theme/tokens';
 
 export type AuthStackParamList = {
@@ -25,6 +27,8 @@ export type AppStackParamList = {
   CreateFlashcard: { courseId: string; cardId?: string };
   Review: { courseId: string; courseName: string };
   ReviewComplete: { count: number; streakDays: number };
+  Quiz: { courseId: string; courseName: string };
+  QuizResult: { score: number; total: number; courseId: string; courseName: string };
 };
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -63,6 +67,8 @@ function MainNavigator() {
       />
       <AppStack.Screen name="Review" component={ReviewScreen} options={{ headerShown: false }} />
       <AppStack.Screen name="ReviewComplete" component={ReviewCompleteScreen} options={{ headerShown: false }} />
+      <AppStack.Screen name="Quiz" component={QuizScreen} options={{ headerShown: false }} />
+      <AppStack.Screen name="QuizResult" component={QuizResultScreen} options={{ headerShown: false }} />
     </AppStack.Navigator>
   );
 }
