@@ -6,11 +6,16 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
-  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { supabase } from '../../lib/supabase';
 import { AuthStackParamList } from '../../navigation/AppNavigator';
+import { HighlighterText } from '../../components/HighlighterText';
+import { PrimaryButton } from '../../components/PrimaryButton';
+import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 
@@ -21,7 +26,7 @@ export default function LoginScreen({ navigation }: Props) {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Fel', 'Fyll i e-post och lösenord.');
+      Alert.alert('Fyll i båda fälten');
       return;
     }
     setLoading(true);
@@ -31,55 +36,138 @@ export default function LoginScreen({ navigation }: Props) {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Studieassistenten</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="E-postadress"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Lösenord"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
-      <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Logga in</Text>
-        )}
-      </TouchableOpacity>
-      <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-        <Text style={styles.link}>Inget konto? Registrera dig</Text>
-      </TouchableOpacity>
-    </View>
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.header}>
+          <HighlighterText
+            textStyle={styles.title}
+          >
+            Studie
+          </HighlighterText>
+          <Text style={styles.titleSuffix}>assistenten</Text>
+          <Text style={styles.subtitle}>Din personliga studieassistent</Text>
+        </View>
+
+        <View style={styles.form}>
+          <View style={styles.field}>
+            <Text style={styles.label}>E-postadress</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="namn@exempel.se"
+              placeholderTextColor={colors.inkMuted}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoComplete="email"
+            />
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Lösenord</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="••••••••"
+              placeholderTextColor={colors.inkMuted}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoComplete="password"
+            />
+          </View>
+
+          <PrimaryButton
+            label="Logga in"
+            onPress={handleLogin}
+            loading={loading}
+          />
+
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Register')}
+            style={styles.linkRow}
+          >
+            <Text style={styles.linkText}>
+              Inget konto?{' '}
+              <Text style={styles.linkAccent}>Registrera dig</Text>
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: '#fff' },
-  title: { fontSize: 28, fontWeight: 'bold', marginBottom: 32, textAlign: 'center', color: '#1a1a1a' },
+  flex: { flex: 1, backgroundColor: colors.paper },
+  container: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing['2xl'],
+    gap: spacing.xl,
+  },
+  header: {
+    gap: spacing.sm,
+  },
+  title: {
+    fontFamily: fontFamily.serif,
+    fontSize: fontSize['3xl'],
+    color: colors.ink,
+    lineHeight: 40,
+  },
+  titleSuffix: {
+    fontFamily: fontFamily.serif,
+    fontSize: fontSize['3xl'],
+    color: colors.ink,
+    lineHeight: 40,
+    marginLeft: spacing.xs,
+  },
+  subtitle: {
+    fontFamily: fontFamily.body,
+    fontSize: fontSize.base,
+    color: colors.inkMuted,
+    marginTop: spacing.xs,
+  },
+  form: {
+    gap: spacing.md,
+  },
+  field: {
+    gap: spacing.xs,
+  },
+  label: {
+    fontFamily: fontFamily.bodySemiBold,
+    fontSize: fontSize.sm,
+    color: colors.ink,
+  },
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-    fontSize: 16,
+    borderColor: colors.cardBorder,
+    borderRadius: radius.button,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    fontSize: fontSize.base,
+    fontFamily: fontFamily.body,
+    color: colors.ink,
+    backgroundColor: colors.cardBg,
   },
-  button: {
-    backgroundColor: '#3B82F6',
-    padding: 14,
-    borderRadius: 8,
+  linkRow: {
     alignItems: 'center',
-    marginBottom: 16,
+    paddingVertical: spacing.sm,
   },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  link: { textAlign: 'center', color: '#3B82F6', fontSize: 14 },
+  linkText: {
+    fontFamily: fontFamily.body,
+    fontSize: fontSize.sm,
+    color: colors.inkMuted,
+  },
+  linkAccent: {
+    fontFamily: fontFamily.bodySemiBold,
+    color: colors.ink,
+    textDecorationLine: 'underline',
+  },
 });
