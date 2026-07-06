@@ -20,9 +20,10 @@ interface Props {
   course: Course;
   index: number;
   onPress?: () => void;
+  onLongPress?: () => void;
 }
 
-export function CourseCard({ course, index, onPress }: Props) {
+export function CourseCard({ course, index, onPress, onLongPress }: Props) {
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(16);
   const reduceMotion = useReducedMotion();
@@ -42,7 +43,7 @@ export function CourseCard({ course, index, onPress }: Props) {
   }));
 
   return (
-    <Pressable onPress={onPress} disabled={!onPress}>
+    <Pressable onPress={onPress} onLongPress={onLongPress} disabled={!onPress}>
       <Animated.View style={[styles.card, animStyle]}>
         <Text style={styles.name}>{course.name}</Text>
         {course.description ? (

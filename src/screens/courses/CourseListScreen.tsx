@@ -98,6 +98,39 @@ export default function CourseListScreen({ navigation }: Props) {
             course={item}
             index={index}
             onPress={() => navigation.navigate('Course', { courseId: item.id, courseName: item.name })}
+            onLongPress={() => {
+              Alert.alert(item.name, 'Vad vill du göra?', [
+                {
+                  text: 'Redigera kurs',
+                  onPress: () => navigation.navigate('EditCourse', {
+                    courseId: item.id,
+                    courseName: item.name,
+                    description: item.description ?? '',
+                  }),
+                },
+                {
+                  text: 'Ta bort kurs',
+                  style: 'destructive',
+                  onPress: () => Alert.alert(
+                    'Ta bort kurs?',
+                    `"${item.name}" och allt innehåll (flashkort, quiz, mindmaps) raderas permanent.`,
+                    [
+                      { text: 'Avbryt', style: 'cancel' },
+                      {
+                        text: 'Ta bort',
+                        style: 'destructive',
+                        onPress: async () => {
+                          const { error } = await supabase.from('courses').delete().eq('id', item.id);
+                          if (error) Alert.alert('Fel', 'Kunde inte ta bort kursen.');
+                          else setCourses((prev) => prev.filter((c) => c.id !== item.id));
+                        },
+                      },
+                    ],
+                  ),
+                },
+                { text: 'Avbryt', style: 'cancel' },
+              ]);
+            }}
           />
         )}
       />

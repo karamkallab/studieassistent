@@ -2,11 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { View, StyleSheet } from 'react-native';
 import Svg, { G, Rect, Text as SvgText, Path, Circle } from 'react-native-svg';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  useReducedMotion,
-} from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated';
 import { MindmapNode } from '../data/sampleMindmap';
 import { colors, fontFamily } from '../theme/tokens';
 
@@ -14,8 +10,8 @@ import { colors, fontFamily } from '../theme/tokens';
 
 const NODE_W = 130;
 const NODE_H = 38;
-const H_GAP = 56;   // horizontal gap between levels
-const V_GAP = 18;   // vertical gap between siblings
+const H_GAP = 56;
+const V_GAP = 18;
 const LEVEL_W = NODE_W + H_GAP;
 
 // ─── Layout types ────────────────────────────────────────────────────────────
@@ -31,11 +27,6 @@ interface LayoutNode {
 
 // ─── Layout algorithm ────────────────────────────────────────────────────────
 
-function countLeaves(node: MindmapNode, collapsed: Set<string>): number {
-  if (collapsed.has(node.id) || node.children.length === 0) return 1;
-  return node.children.reduce((s, c) => s + countLeaves(c, collapsed), 0);
-}
-
 function layoutTree(
   node: MindmapNode,
   depth: number,
@@ -47,7 +38,10 @@ function layoutTree(
 
   if (isCollapsed || node.children.length === 0) {
     return {
-      layoutNode: { id: node.id, topic: node.topic, x, y: startY, children: [], hasChildren: node.children.length > 0 },
+      layoutNode: {
+        id: node.id, topic: node.topic, x, y: startY, children: [],
+        hasChildren: node.children.length > 0,
+      },
       endY: startY + NODE_H + V_GAP,
     };
   }
@@ -60,13 +54,14 @@ function layoutTree(
     currentY = endY;
   }
 
-  // Center the parent between first and last child
   const firstY = childLayouts[0].y;
   const lastY = childLayouts[childLayouts.length - 1].y;
   const centerY = (firstY + lastY) / 2;
 
   return {
-    layoutNode: { id: node.id, topic: node.topic, x, y: centerY, children: childLayouts, hasChildren: true },
+    layoutNode: {
+      id: node.id, topic: node.topic, x, y: centerY, children: childLayouts, hasChildren: true,
+    },
     endY: currentY,
   };
 }
@@ -82,7 +77,7 @@ function collectEdges(node: LayoutNode): Array<{ from: LayoutNode; to: LayoutNod
   ];
 }
 
-// ─── SVG Renderers ───────────────────────────────────────────────────────────
+// ─── SVG components ──────────────────────────────────────────────────────────
 
 function EdgePath({ from, to }: { from: LayoutNode; to: LayoutNode }) {
   const x1 = from.x + NODE_W;
@@ -103,17 +98,26 @@ function EdgePath({ from, to }: { from: LayoutNode; to: LayoutNode }) {
 function NodeBox({
   node,
   isRoot,
-  onPress,
+  editMode,
+  onViewPress,
+  onEditPress,
 }: {
   node: LayoutNode;
   isRoot: boolean;
-  onPress: () => void;
+  editMode: boolean;
+  onViewPress: () => void;
+  onEditPress: () => void;
 }) {
   const fill = isRoot ? colors.highlight : colors.cardBg;
-  const stroke = isRoot ? colors.highlight : colors.cardBorder;
+  const stroke = isRoot
+    ? colors.highlight
+    : editMode
+    ? colors.inkMuted
+    : colors.cardBorder;
+  const strokeW = editMode ? 1.5 : 1;
 
   return (
-    <G onPress={onPress}>
+    <G onPress={editMode ? onEditPress : onViewPress}>
       <Rect
         x={node.x}
         y={node.y}
@@ -122,10 +126,11 @@ function NodeBox({
         rx={8}
         fill={fill}
         stroke={stroke}
-        strokeWidth={1}
+        strokeWidth={strokeW}
+        strokeDasharray={editMode && !isRoot ? '4 2' : undefined}
       />
       <SvgText
-        x={node.x + (node.hasChildren ? NODE_W / 2 - 8 : NODE_W / 2)}
+        x={node.x + NODE_W / 2 - (node.hasChildren && !editMode ? 8 : 0)}
         y={node.y + NODE_H / 2 + 1}
         fontSize={12}
         fontFamily={fontFamily.body}
@@ -135,13 +140,36 @@ function NodeBox({
       >
         {node.topic.length > 16 ? node.topic.slice(0, 14) + '…' : node.topic}
       </SvgText>
-      {node.hasChildren && (
+      {/* Collapse dot in view mode */}
+      {node.hasChildren && !editMode && (
         <Circle
           cx={node.x + NODE_W - 10}
           cy={node.y + NODE_H / 2}
           r={5}
           fill={colors.inkMuted}
         />
+      )}
+      {/* Add child button in edit mode */}
+      {editMode && (
+        <Circle
+          cx={node.x + NODE_W - 8}
+          cy={node.y + NODE_H / 2}
+          r={7}
+          fill={colors.ink}
+        />
+      )}
+      {editMode && (
+        <SvgText
+          x={node.x + NODE_W - 8}
+          y={node.y + NODE_H / 2 + 1}
+          fontSize={13}
+          fill={colors.paper}
+          textAnchor="middle"
+          alignmentBaseline="middle"
+          fontFamily={fontFamily.body}
+        >
+          ≡
+        </SvgText>
       )}
     </G>
   );
@@ -151,11 +179,12 @@ function NodeBox({
 
 interface Props {
   data: MindmapNode;
+  editMode: boolean;
+  onNodePress: (id: string, topic: string, isRoot: boolean) => void;
 }
 
-export function MindmapView({ data }: Props) {
+export function MindmapView({ data, editMode, onNodePress }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const reduceMotion = useReducedMotion();
 
   const { layoutNode, endY } = useMemo(
     () => layoutTree(data, 0, 0, collapsed),
@@ -165,76 +194,54 @@ export function MindmapView({ data }: Props) {
   const nodes = useMemo(() => flattenNodes(layoutNode), [layoutNode]);
   const edges = useMemo(() => collectEdges(layoutNode), [layoutNode]);
 
-  // Bounding box for SVG
   const maxX = nodes.reduce((m, n) => Math.max(m, n.x + NODE_W), 0) + H_GAP;
   const minY = nodes.reduce((m, n) => Math.min(m, n.y), Infinity) - V_GAP;
   const maxY = Math.max(endY, nodes.reduce((m, n) => Math.max(m, n.y + NODE_H), 0)) + V_GAP;
   const svgW = maxX;
   const svgH = maxY - minY;
 
-  // Pan/zoom shared values
-  const translateX = useSharedValue(16);
-  const translateY = useSharedValue(16);
+  // Pan + zoom
+  const tx = useSharedValue(16);
+  const ty = useSharedValue(16);
   const scale = useSharedValue(1);
   const savedTx = useSharedValue(16);
   const savedTy = useSharedValue(16);
   const savedScale = useSharedValue(1);
 
-  const panGesture = Gesture.Pan()
-    .onUpdate((e) => {
-      translateX.value = savedTx.value + e.translationX;
-      translateY.value = savedTy.value + e.translationY;
-    })
-    .onEnd(() => {
-      savedTx.value = translateX.value;
-      savedTy.value = translateY.value;
-    });
+  const pan = Gesture.Pan()
+    .onUpdate((e) => { tx.value = savedTx.value + e.translationX; ty.value = savedTy.value + e.translationY; })
+    .onEnd(() => { savedTx.value = tx.value; savedTy.value = ty.value; });
 
-  const pinchGesture = Gesture.Pinch()
-    .onUpdate((e) => {
-      scale.value = Math.max(0.3, Math.min(3, savedScale.value * e.scale));
-    })
-    .onEnd(() => {
-      savedScale.value = scale.value;
-    });
-
-  const composed = Gesture.Simultaneous(panGesture, pinchGesture);
+  const pinch = Gesture.Pinch()
+    .onUpdate((e) => { scale.value = Math.max(0.3, Math.min(3, savedScale.value * e.scale)); })
+    .onEnd(() => { savedScale.value = scale.value; });
 
   const containerStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: translateX.value },
-      { translateY: translateY.value },
-      { scale: scale.value },
-    ],
+    transform: [{ translateX: tx.value }, { translateY: ty.value }, { scale: scale.value }],
   }));
 
   const toggleCollapse = (id: string) => {
     setCollapsed((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };
 
   return (
-    <GestureDetector gesture={composed}>
+    <GestureDetector gesture={Gesture.Simultaneous(pan, pinch)}>
       <View style={styles.container}>
         <Animated.View style={containerStyle}>
           <Svg width={svgW} height={svgH} viewBox={`0 ${minY} ${svgW} ${svgH}`}>
-            {/* Edges behind nodes */}
-            {edges.map((e, i) => (
-              <EdgePath key={i} from={e.from} to={e.to} />
-            ))}
-            {/* Nodes */}
+            {edges.map((e, i) => <EdgePath key={i} from={e.from} to={e.to} />)}
             {nodes.map((node, i) => (
               <NodeBox
                 key={node.id}
                 node={node}
                 isRoot={i === 0}
-                onPress={() => {
-                  if (node.hasChildren) toggleCollapse(node.id);
-                }}
+                editMode={editMode}
+                onViewPress={() => { if (node.hasChildren) toggleCollapse(node.id); }}
+                onEditPress={() => onNodePress(node.id, node.topic, i === 0)}
               />
             ))}
           </Svg>

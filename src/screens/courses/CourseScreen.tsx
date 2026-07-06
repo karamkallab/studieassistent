@@ -22,6 +22,7 @@ import { getUsage, FREE_UPLOADS_PER_MONTH } from '../../lib/limits';
 
 type Flashcard = { id: string; question: string; answer: string; next_review_at: string };
 type Document = { id: string; name: string; generated_at: string | null };
+type QuizQuestion = { id: string; question: string; correct_answer: string };
 
 type Props = NativeStackScreenProps<AppStackParamList, 'Course'>;
 
@@ -30,6 +31,7 @@ export default function CourseScreen({ route, navigation }: Props) {
   const { user } = useAuth();
   const [cards, setCards] = useState<Flashcard[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
   const [quizCount, setQuizCount] = useState(0);
   const [dueCount, setDueCount] = useState(0);
   const [uploadsRemaining, setUploadsRemaining] = useState<number | null>(null);
@@ -42,15 +44,15 @@ export default function CourseScreen({ route, navigation }: Props) {
       const [
         { data: cardData },
         { data: docData },
-        { count: qCount },
+        { data: quizData },
         usage,
       ] = await Promise.all([
         supabase.from('flashcards').select('id, question, answer, next_review_at')
           .eq('course_id', courseId).eq('user_id', user!.id).order('created_at', { ascending: false }),
         supabase.from('documents').select('id, name, generated_at')
           .eq('course_id', courseId).eq('user_id', user!.id).order('created_at', { ascending: false }),
-        supabase.from('quiz_questions').select('id', { count: 'exact', head: true })
-          .eq('course_id', courseId).eq('user_id', user!.id),
+        supabase.from('quiz_questions').select('id, question, correct_answer')
+          .eq('course_id', courseId).eq('user_id', user!.id).order('created_at'),
         getUsage(user!.id),
       ]);
 
@@ -58,7 +60,9 @@ export default function CourseScreen({ route, navigation }: Props) {
       setCards(allCards);
       setDueCount(allCards.filter((c) => new Date(c.next_review_at) <= new Date()).length);
       setDocuments(docData ?? []);
-      setQuizCount(qCount ?? 0);
+      const qs = (quizData ?? []) as QuizQuestion[];
+      setQuizQuestions(qs);
+      setQuizCount(qs.length);
       setUploadsRemaining(usage.uploadsRemaining);
     } catch {
       Alert.alert('Fel', 'Kunde inte hämta kursdata. Kontrollera din internetanslutning.');
@@ -85,6 +89,20 @@ export default function CourseScreen({ route, navigation }: Props) {
     } finally {
       setGenerating(null);
     }
+  };
+
+  const handleDeleteQuizQuestion = (id: string) => {
+    Alert.alert('Ta bort fråga?', 'Det går inte att ångra.', [
+      { text: 'Avbryt', style: 'cancel' },
+      {
+        text: 'Ta bort', style: 'destructive',
+        onPress: async () => {
+          const { error } = await supabase.from('quiz_questions').delete().eq('id', id);
+          if (error) Alert.alert('Fel', 'Kunde inte ta bort frågan.');
+          else setQuizQuestions((p) => p.filter((q) => q.id !== id));
+        },
+      },
+    ]);
   };
 
   const handleDeleteCard = (id: string) => {
@@ -198,6 +216,29 @@ export default function CourseScreen({ route, navigation }: Props) {
             <Text style={styles.quota}>
               {uploadsRemaining} av {FREE_UPLOADS_PER_MONTH} uppladdningar kvar denna månad
             </Text>
+          )}
+
+          {/* Quiz-frågor */}
+          {quizQuestions.length > 0 && (
+            <View style={styles.section}>
+              <View style={styles.cardSectionHeader}>
+                <Text style={styles.sectionLabel}>QUIZ-FRÅGOR ({quizQuestions.length})</Text>
+                <TouchableOpacity onPress={() => navigation.navigate('Quiz', { courseId, courseName })}>
+                  <Text style={styles.addCardText}>Starta quiz</Text>
+                </TouchableOpacity>
+              </View>
+              {quizQuestions.map((q) => (
+                <View key={q.id} style={styles.card}>
+                  <View style={styles.cardContent}>
+                    <Text style={styles.question} numberOfLines={2}>{q.question}</Text>
+                    <Text style={styles.answer} numberOfLines={1}>Svar: {q.correct_answer}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => handleDeleteQuizQuestion(q.id)} style={styles.actionBtn}>
+                    <Text style={[styles.actionText, { color: colors.rust }]}>Ta bort</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
           )}
 
           {/* Flashkort-sektion header */}

@@ -16,6 +16,7 @@ import QuizResultScreen from '../screens/quiz/QuizResultScreen';
 import MindmapScreen from '../screens/mindmap/MindmapScreen';
 import UpgradeScreen from '../screens/upgrade/UpgradeScreen';
 import SummaryScreen from '../screens/summary/SummaryScreen';
+import EditCourseScreen from '../screens/courses/EditCourseScreen';
 import { colors, fontFamily } from '../theme/tokens';
 
 export type AuthStackParamList = {
@@ -35,6 +36,7 @@ export type AppStackParamList = {
   Mindmap: { courseId: string; courseName: string; documentId?: string };
   Upgrade: undefined;
   Summary: { documentId?: string; courseId: string };
+  EditCourse: { courseId: string; courseName: string; description: string };
 };
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -78,6 +80,7 @@ function MainNavigator() {
       <AppStack.Screen name="Mindmap" component={MindmapScreen} options={{ title: 'Tankekarta' }} />
       <AppStack.Screen name="Upgrade" component={UpgradeScreen} options={{ title: 'Premium' }} />
       <AppStack.Screen name="Summary" component={SummaryScreen} options={{ title: 'Sammanfattning' }} />
+      <AppStack.Screen name="EditCourse" component={EditCourseScreen} options={{ title: 'Redigera kurs' }} />
     </AppStack.Navigator>
   );
 }
