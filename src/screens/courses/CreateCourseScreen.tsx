@@ -17,6 +17,7 @@ import { AppStackParamList } from '../../navigation/AppNavigator';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { UploadAnimation, type UploadPhase } from '../../components/UploadAnimation';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
+import { canUpload, incrementUploads, FREE_UPLOADS_PER_MONTH, getUsage } from '../../lib/limits';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'CreateCourse'>;
 
@@ -27,6 +28,11 @@ export default function CreateCourseScreen({ navigation }: Props) {
   const [pdfFile, setPdfFile] = useState<{ uri: string; name: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadPhase, setUploadPhase] = useState<UploadPhase>('uploading');
+  const [uploadsRemaining, setUploadsRemaining] = useState<number | null>(null);
+
+  React.useEffect(() => {
+    getUsage(user!.id).then((u) => setUploadsRemaining(u.uploadsRemaining));
+  }, []);
 
   const pickPdf = async () => {
     const result = await DocumentPicker.getDocumentAsync({
