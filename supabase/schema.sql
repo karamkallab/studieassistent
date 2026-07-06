@@ -101,40 +101,42 @@ alter table quiz_questions enable row level security;
 alter table user_stats     enable row level security;
 alter table user_usage     enable row level security;
 
--- DROP + CREATE för att vara idempotent (CREATE POLICY har ingen IF NOT EXISTS)
-drop policy if exists "courses: own rows"        on courses;
-drop policy if exists "documents: own rows"      on documents;
-drop policy if exists "summaries: own rows"      on summaries;
-drop policy if exists "flashcards: own rows"     on flashcards;
-drop policy if exists "mindmaps: own rows"       on mindmaps;
-drop policy if exists "quiz_questions: own rows" on quiz_questions;
-drop policy if exists "user_stats: own row"      on user_stats;
-drop policy if exists "user_usage: own row"      on user_usage;
-drop policy if exists "storage documents: own files" on storage.objects;
+-- Policies via DO-block: kastar inget fel om de redan existerar
+do $$ begin
 
-create policy "courses: own rows" on courses
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  begin create policy "courses: own rows" on courses
+    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  exception when duplicate_object then null; end;
 
-create policy "documents: own rows" on documents
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  begin create policy "documents: own rows" on documents
+    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  exception when duplicate_object then null; end;
 
-create policy "summaries: own rows" on summaries
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  begin create policy "summaries: own rows" on summaries
+    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  exception when duplicate_object then null; end;
 
-create policy "flashcards: own rows" on flashcards
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  begin create policy "flashcards: own rows" on flashcards
+    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  exception when duplicate_object then null; end;
 
-create policy "mindmaps: own rows" on mindmaps
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  begin create policy "mindmaps: own rows" on mindmaps
+    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  exception when duplicate_object then null; end;
 
-create policy "quiz_questions: own rows" on quiz_questions
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  begin create policy "quiz_questions: own rows" on quiz_questions
+    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  exception when duplicate_object then null; end;
 
-create policy "user_stats: own row" on user_stats
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  begin create policy "user_stats: own row" on user_stats
+    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  exception when duplicate_object then null; end;
 
-create policy "user_usage: own row" on user_usage
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  begin create policy "user_usage: own row" on user_usage
+    for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  exception when duplicate_object then null; end;
+
+end $$;
 
 -- ============================================================
 -- Storage: bucket för PDF-dokument
@@ -143,16 +145,20 @@ insert into storage.buckets (id, name, public)
 values ('documents', 'documents', false)
 on conflict (id) do nothing;
 
-create policy "storage documents: own files" on storage.objects
-  for all
-  using (
-    bucket_id = 'documents'
-    and auth.uid()::text = (storage.foldername(name))[1]
-  )
-  with check (
-    bucket_id = 'documents'
-    and auth.uid()::text = (storage.foldername(name))[1]
-  );
+do $$ begin
+  begin
+    create policy "storage documents: own files" on storage.objects
+      for all
+      using (
+        bucket_id = 'documents'
+        and auth.uid()::text = (storage.foldername(name))[1]
+      )
+      with check (
+        bucket_id = 'documents'
+        and auth.uid()::text = (storage.foldername(name))[1]
+      );
+  exception when duplicate_object then null; end;
+end $$;
 
 -- ============================================================
 -- increment_usage-funktion (för freemium-kvoter)
