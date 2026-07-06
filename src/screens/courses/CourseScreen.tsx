@@ -175,23 +175,19 @@ export default function CourseScreen({ route, navigation }: Props) {
           {/* Studieverktyg */}
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>STUDIEVERKTYG</Text>
+            {cards.length > 0 && (
+              <TouchableOpacity
+                style={[styles.studyBtn, { backgroundColor: colors.ink }]}
+                onPress={() => navigation.navigate('StudyMode', { courseId, courseName })}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.studyBtnTxt}>
+                  Plugga{dueCount > 0 ? ` · ${dueCount} att repetera` : ''}
+                </Text>
+                <Text style={styles.studyBtnSub}>Välj flashcards, skriv, matcha eller quiz</Text>
+              </TouchableOpacity>
+            )}
             <View style={styles.toolGrid}>
-              {dueCount > 0 && (
-                <TouchableOpacity
-                  style={[styles.toolCard, { backgroundColor: colors.ink }]}
-                  onPress={() => navigation.navigate('Review', { courseId, courseName })}
-                >
-                  <Text style={[styles.toolCount, { color: colors.highlight }]}>{dueCount}</Text>
-                  <Text style={[styles.toolLabel, { color: colors.paper }]}>att repetera</Text>
-                </TouchableOpacity>
-              )}
-              {cards.length > 0 && dueCount === 0 && (
-                <View style={[styles.toolCard, { backgroundColor: colors.cardBg }]}>
-                  <Text style={styles.toolCount}>{cards.length}</Text>
-                  <Text style={styles.toolLabel}>flashkort</Text>
-                  <Text style={styles.toolDone}>Klart idag!</Text>
-                </View>
-              )}
               {quizCount > 0 && (
                 <TouchableOpacity
                   style={styles.toolCard}
@@ -300,6 +296,12 @@ const styles = StyleSheet.create({
   },
   docName: { flex: 1, fontFamily: fontFamily.body, fontSize: fontSize.base, color: colors.ink, marginRight: spacing.sm },
   docAction: { fontFamily: fontFamily.bodySemiBold, fontSize: fontSize.sm, color: colors.ink, textDecorationLine: 'underline' },
+
+  studyBtn: {
+    borderRadius: radius.card, padding: spacing.md, gap: spacing.xs,
+  },
+  studyBtnTxt: { fontFamily: fontFamily.bodySemiBold, fontSize: fontSize.base, color: colors.paper },
+  studyBtnSub: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.cardBorder },
 
   toolGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   toolCard: {

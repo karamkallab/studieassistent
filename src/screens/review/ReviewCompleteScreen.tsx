@@ -40,7 +40,7 @@ export default function ReviewCompleteScreen({ route, navigation }: Props) {
       <View style={styles.actions}>
         <PrimaryButton
           label="Tillbaka till kurser"
-          onPress={() => navigation.navigate('CourseList')}
+          onPress={() => navigation.navigate('Main')}
         />
       </View>
     </View>

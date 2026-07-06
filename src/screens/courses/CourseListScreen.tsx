@@ -8,21 +8,21 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
-import { AppStackParamList } from '../../navigation/AppNavigator';
+import type { AppStackParamList } from '../../navigation/AppNavigator';
 import { CourseCard } from '../../components/CourseCard';
 import { HighlighterText } from '../../components/HighlighterText';
 import { getStreak } from '../../lib/streak';
 import { colors, fontFamily, fontSize, spacing } from '../../theme/tokens';
 
 type Course = { id: string; name: string; description: string | null; created_at: string };
-type Props = NativeStackScreenProps<AppStackParamList, 'CourseList'>;
 
-export default function CourseListScreen({ navigation }: Props) {
-  const { user, signOut } = useAuth();
+export default function CourseListScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
+  const { user } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -54,9 +54,6 @@ export default function CourseListScreen({ navigation }: Props) {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <HighlighterText textStyle={styles.heading}>Mina kurser</HighlighterText>
-          <TouchableOpacity onPress={signOut} style={styles.signOutBtn}>
-            <Text style={styles.signOutText}>Logga ut</Text>
-          </TouchableOpacity>
         </View>
         {streak > 0 && (
           <View style={styles.streakBadge}>
@@ -156,10 +153,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.cardBorder,
   },
-  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerTop: { flexDirection: 'row', alignItems: 'center' },
   heading: { fontFamily: fontFamily.serif, fontSize: fontSize['2xl'], color: colors.ink },
-  signOutBtn: { padding: spacing.xs },
-  signOutText: { fontFamily: fontFamily.body, fontSize: fontSize.sm, color: colors.inkMuted, textDecorationLine: 'underline' },
   streakBadge: {
     alignSelf: 'flex-start',
     backgroundColor: colors.highlight,
