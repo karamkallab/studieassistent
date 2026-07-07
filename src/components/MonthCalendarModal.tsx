@@ -138,6 +138,6 @@ const st = StyleSheet.create({
   cellTxtToday: { color: colors.paper, fontFamily: fontFamily.bodySemiBold },
   dot: {
     position: 'absolute', bottom: 2, width: 4, height: 4, borderRadius: 2,
-    backgroundColor: colors.highlight,
+    backgroundColor: colors.inkMuted,
   },
 });

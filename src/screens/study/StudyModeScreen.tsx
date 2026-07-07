@@ -4,7 +4,6 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { AppStackParamList } from '../../navigation/AppNavigator';
-import { HighlighterText } from '../../components/HighlighterText';
 import { colors, fontFamily, fontSize, spacing, radius, cardRotation } from '../../theme/tokens';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'StudyMode'>;
@@ -89,7 +88,7 @@ export default function StudyModeScreen({ route, navigation }: Props) {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <HighlighterText textStyle={styles.title}>{courseName}</HighlighterText>
+      <Text style={styles.title}>{courseName}</Text>
       <Text style={styles.subtitle}>Välj pluggläge</Text>
 
       {loading ? <ActivityIndicator color={colors.ink} style={{ marginTop: spacing.xl }} /> : (

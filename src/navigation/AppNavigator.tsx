@@ -48,7 +48,7 @@ export type AppStackParamList = {
   Mindmap: { courseId: string; courseName: string; documentId?: string };
   Upgrade: undefined;
   Summary: { documentId?: string; courseId: string };
-  EditCourse: { courseId: string; courseName: string; description: string };
+  EditCourse: { courseId: string; courseName: string; description: string; color: string };
   CreatePlan: { planId?: string };
 };
 

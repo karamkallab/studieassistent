@@ -5,19 +5,29 @@ import {
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import Svg, { Circle, Path } from 'react-native-svg';
+import Animated from 'react-native-reanimated';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import type { AppStackParamList } from '../../navigation/AppNavigator';
-import { HighlighterText } from '../../components/HighlighterText';
 import { getStreak } from '../../lib/streak';
 import { usePlanCompletions } from '../../hooks/usePlanCompletions';
 import { mondayOf } from '../../lib/dates';
+import { PressableScale } from '../../components/PressableScale';
+import { StaggerIn } from '../../components/StaggerIn';
+import { AnimatedCheck } from '../../components/AnimatedCheck';
+import { useStreakPulse } from '../../hooks/useStreakPulse';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 
 type DueCourse = { courseId: string; courseName: string; dueCount: number };
 
 const MONTH_NAMES = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
 const DAY_NAMES = ['Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör', 'Sön'];
+
+const FOCUS_RING_SIZE = 48;
+const FOCUS_RING_STROKE = 5;
+const FOCUS_RING_RADIUS = (FOCUS_RING_SIZE - FOCUS_RING_STROKE) / 2;
+const FOCUS_RING_CIRC = 2 * Math.PI * FOCUS_RING_RADIUS;
 
 export default function HomeScreen() {
   const { user } = useAuth();
@@ -30,6 +40,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [focusWorkMins, setFocusWorkMins] = useState(25);
   const [focusBreakMins, setFocusBreakMins] = useState(5);
+  const [weeklyFocusMinutes, setWeeklyFocusMinutes] = useState(0);
 
   const today = new Date();
   const monday = mondayOf(today);
@@ -50,6 +61,7 @@ export default function HomeScreen() {
       { data: courses },
       streakDays,
       { data: focusSettings },
+      { data: focusSessions },
     ] = await Promise.all([
       supabase.from('flashcards')
         .select('id, course_id')
@@ -60,6 +72,8 @@ export default function HomeScreen() {
       supabase.from('user_settings')
         .select('focus_work_minutes, focus_break_minutes')
         .eq('user_id', user!.id).maybeSingle(),
+      supabase.from('focus_sessions').select('minutes')
+        .eq('user_id', user!.id).gte('completed_at', new Date(Date.now() - 7 * 86400000).toISOString()),
       fetchRange(weekMonday, weekSunday),
     ]);
 
@@ -67,6 +81,7 @@ export default function HomeScreen() {
       setFocusWorkMins(focusSettings.focus_work_minutes);
       setFocusBreakMins(focusSettings.focus_break_minutes);
     }
+    setWeeklyFocusMinutes((focusSessions ?? []).reduce((sum, r) => sum + r.minutes, 0));
 
     // Group due cards by course
     const courseMap = new Map<string, { name: string; count: number }>();
@@ -100,6 +115,12 @@ export default function HomeScreen() {
     0,
   );
 
+  const streakPulseStyle = useStreakPulse(streak);
+
+  const focusWeeklyGoal = focusWorkMins * 5;
+  const focusProgress = Math.min(1, weeklyFocusMinutes / focusWeeklyGoal);
+  const focusDashOffset = FOCUS_RING_CIRC * (1 - focusProgress);
+
   const navigateToFocus = () => {
     (navigation as any).navigate('Fokus');
   };
@@ -132,12 +153,12 @@ export default function HomeScreen() {
     >
       {/* Header */}
       <View style={s.header}>
-        <HighlighterText textStyle={s.heading}>Idag</HighlighterText>
+        <Text style={s.heading}>Idag</Text>
         <Text style={s.dateLbl}>{dateLabel()}</Text>
         {streak > 0 && (
-          <View style={s.streakBadge}>
+          <Animated.View style={[s.streakBadge, streakPulseStyle]}>
             <Text style={s.streakTxt}>{streak} {streak === 1 ? 'dag' : 'dagar'} i rad</Text>
-          </View>
+          </Animated.View>
         )}
       </View>
 
@@ -146,27 +167,49 @@ export default function HomeScreen() {
         <View style={s.section}>
           <Text style={s.sectionLbl}>ATT REPETERA</Text>
           {dueCourses.map(dc => (
-            <TouchableOpacity
+            <PressableScale
               key={dc.courseId}
               style={s.dueCard}
               onPress={() => navigation.navigate('Review', { courseId: dc.courseId, courseName: dc.courseName })}
-              activeOpacity={0.8}
             >
               <View style={{ flex: 1 }}>
                 <Text style={s.dueCourseName}>{dc.courseName}</Text>
                 <Text style={s.dueCnt}>{dc.dueCount} kort att repetera</Text>
               </View>
               <Text style={s.dueArrow}>→</Text>
-            </TouchableOpacity>
+            </PressableScale>
           ))}
         </View>
       )}
 
       {/* Quick focus */}
-      <TouchableOpacity style={s.focusBtn} onPress={navigateToFocus} activeOpacity={0.85}>
-        <Text style={s.focusBtnTxt}>◎  Starta fokustimer</Text>
-        <Text style={s.focusBtnSub}>{focusWorkMins} min fokus · {focusBreakMins} min paus</Text>
-      </TouchableOpacity>
+      <PressableScale style={s.focusBtn} onPress={navigateToFocus}>
+        <View style={s.focusRingWrap}>
+          <Svg width={FOCUS_RING_SIZE} height={FOCUS_RING_SIZE}>
+            <Circle
+              cx={FOCUS_RING_SIZE / 2} cy={FOCUS_RING_SIZE / 2} r={FOCUS_RING_RADIUS}
+              fill="none" stroke="rgba(247,245,240,0.2)" strokeWidth={FOCUS_RING_STROKE}
+            />
+            <Circle
+              cx={FOCUS_RING_SIZE / 2} cy={FOCUS_RING_SIZE / 2} r={FOCUS_RING_RADIUS}
+              fill="none" stroke={colors.highlight} strokeWidth={FOCUS_RING_STROKE}
+              strokeDasharray={`${FOCUS_RING_CIRC} ${FOCUS_RING_CIRC}`}
+              strokeDashoffset={focusDashOffset}
+              strokeLinecap="round"
+              transform={`rotate(-90 ${FOCUS_RING_SIZE / 2} ${FOCUS_RING_SIZE / 2})`}
+            />
+          </Svg>
+          <View style={s.focusPlayWrap}>
+            <Svg width={14} height={14} viewBox="0 0 24 24">
+              <Path d="M8 5v14l11-7z" fill={colors.highlight} />
+            </Svg>
+          </View>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.focusBtnTxt}>Starta fokustimer</Text>
+          <Text style={s.focusBtnSub}>{focusWorkMins} min fokus · {focusBreakMins} min paus</Text>
+        </View>
+      </PressableScale>
 
       {/* Today's plans */}
       <View style={s.section}>
@@ -179,24 +222,32 @@ export default function HomeScreen() {
         {todayPlans.length === 0 ? (
           <Text style={s.emptyTxt}>Inga pass inplanerade idag.</Text>
         ) : (
-          todayPlans.map(plan => {
+          todayPlans.map((plan, index) => {
             const done = isDone(plan.id, today);
             const courseName = plan.courses ? plan.courses.name : null;
+            const courseColor = plan.courses?.color;
             return (
-              <View key={plan.id} style={[s.planCard, done && s.planCardDone]}>
-                <TouchableOpacity onPress={() => toggleDone(plan.id, today)} style={s.doneBtn}>
-                  <View style={[s.doneCircle, done && s.doneCircleFilled]}>
-                    {done && <Text style={s.doneCheck}>✓</Text>}
+              <StaggerIn key={plan.id} index={index}>
+                <View
+                  style={[
+                    s.planCard, done && s.planCardDone,
+                    { borderLeftWidth: 4, borderLeftColor: courseColor ?? colors.cardBorder },
+                  ]}
+                >
+                  <PressableScale onPress={() => toggleDone(plan.id, today)} style={s.doneBtn}>
+                    <View style={[s.doneCircle, done && s.doneCircleFilled]}>
+                      {done && <AnimatedCheck size={13} />}
+                    </View>
+                  </PressableScale>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.planTitle, done && s.planTitleDone]}>{plan.title}</Text>
+                    <Text style={s.planMeta}>
+                      {plan.time_of_day?.slice(0, 5)} · {plan.duration_minutes} min
+                      {courseName ? <Text style={{ color: courseColor }}> · {courseName}</Text> : ''}
+                    </Text>
                   </View>
-                </TouchableOpacity>
-                <View style={{ flex: 1 }}>
-                  <Text style={[s.planTitle, done && s.planTitleDone]}>{plan.title}</Text>
-                  <Text style={s.planMeta}>
-                    {plan.time_of_day?.slice(0, 5)} · {plan.duration_minutes} min
-                    {courseName ? ` · ${courseName}` : ''}
-                  </Text>
                 </View>
-              </View>
+              </StaggerIn>
             );
           })
         )}
@@ -207,8 +258,12 @@ export default function HomeScreen() {
         <View style={s.section}>
           <Text style={s.sectionLbl}>VECKANS PASS</Text>
           <Text style={s.weeklyNum}>{weeklyDone} av {weeklyTotal} klara</Text>
-          <View style={s.progressBg}>
-            <View style={[s.progressFill, { width: `${Math.min(100, Math.round((weeklyDone / weeklyTotal) * 100))}%` as any }]} />
+          <View style={s.segmentRow}>
+            {Array.from({ length: weeklyTotal }, (_, i) => (
+              <StaggerIn key={i} index={i} style={{ flex: 1 }}>
+                <View style={[s.segment, i < weeklyDone && s.segmentFilled]} />
+              </StaggerIn>
+            ))}
           </View>
         </View>
       )}
@@ -225,8 +280,9 @@ const s = StyleSheet.create({
   heading: { fontFamily: fontFamily.serif, fontSize: fontSize['2xl'], color: colors.ink },
   dateLbl: { fontFamily: fontFamily.mono, fontSize: fontSize.sm, color: colors.inkMuted },
   streakBadge: {
-    alignSelf: 'flex-start', backgroundColor: colors.highlight,
-    paddingVertical: 3, paddingHorizontal: spacing.sm, borderRadius: 20, marginTop: spacing.xs,
+    alignSelf: 'flex-start', backgroundColor: 'transparent',
+    borderWidth: 1, borderColor: colors.ink,
+    paddingVertical: 2, paddingHorizontal: spacing.sm, borderRadius: 20, marginTop: spacing.xs,
   },
   streakTxt: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.ink },
 
@@ -241,15 +297,23 @@ const s = StyleSheet.create({
     padding: spacing.md, gap: spacing.sm,
   },
   dueCourseName: { fontFamily: fontFamily.bodySemiBold, fontSize: fontSize.base, color: colors.paper },
-  dueCnt: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.highlight, marginTop: 2 },
+  dueCnt: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.cardBorder, marginTop: 2 },
   dueArrow: { fontSize: fontSize.xl, color: colors.paper },
 
   focusBtn: {
-    backgroundColor: colors.highlight, borderRadius: radius.card,
-    padding: spacing.md, alignItems: 'center', gap: spacing.xs,
+    flexDirection: 'row', backgroundColor: colors.ink, borderRadius: radius.card,
+    padding: spacing.md, alignItems: 'center', gap: spacing.md,
   },
-  focusBtnTxt: { fontFamily: fontFamily.bodySemiBold, fontSize: fontSize.base, color: colors.ink },
-  focusBtnSub: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.ink },
+  focusRingWrap: {
+    width: FOCUS_RING_SIZE, height: FOCUS_RING_SIZE,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  focusPlayWrap: {
+    position: 'absolute', alignItems: 'center', justifyContent: 'center',
+    marginLeft: 2,
+  },
+  focusBtnTxt: { fontFamily: fontFamily.bodySemiBold, fontSize: fontSize.base, color: colors.paper },
+  focusBtnSub: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: 'rgba(247,245,240,0.7)', marginTop: 2 },
 
   emptyTxt: { fontFamily: fontFamily.body, fontSize: fontSize.sm, color: colors.inkMuted },
 
@@ -258,7 +322,7 @@ const s = StyleSheet.create({
     backgroundColor: colors.cardBg, borderWidth: 1, borderColor: colors.cardBorder,
     borderRadius: radius.card, padding: spacing.md, gap: spacing.sm,
   },
-  planCardDone: { opacity: 0.55 },
+  planCardDone: { opacity: 0.65 },
   doneBtn: { padding: spacing.xs },
   doneCircle: {
     width: 22, height: 22, borderRadius: 11,
@@ -266,12 +330,12 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   doneCircleFilled: { backgroundColor: colors.sage, borderColor: colors.sage },
-  doneCheck: { color: '#fff', fontSize: 12, lineHeight: 14, fontFamily: fontFamily.bodySemiBold },
   planTitle: { fontFamily: fontFamily.bodySemiBold, fontSize: fontSize.base, color: colors.ink },
-  planTitleDone: { textDecorationLine: 'line-through', color: colors.inkMuted },
+  planTitleDone: { color: colors.inkMuted },
   planMeta: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, marginTop: 2 },
 
   weeklyNum: { fontFamily: fontFamily.mono, fontSize: fontSize.lg, color: colors.ink },
-  progressBg: { height: 6, backgroundColor: colors.cardBorder, borderRadius: 3, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: colors.sage, borderRadius: 3 },
+  segmentRow: { flexDirection: 'row', gap: spacing.xs },
+  segment: { height: 6, borderRadius: 3, backgroundColor: colors.cardBorder },
+  segmentFilled: { backgroundColor: colors.sage },
 });

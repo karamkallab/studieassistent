@@ -2,7 +2,6 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppStackParamList } from '../../navigation/AppNavigator';
-import { HighlighterText } from '../../components/HighlighterText';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 import { FREE_UPLOADS_PER_MONTH } from '../../lib/limits';
@@ -20,7 +19,7 @@ const FEATURES = [
 export default function UpgradeScreen({ navigation }: Props) {
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
-      <HighlighterText textStyle={styles.title}>Studieassistenten Premium</HighlighterText>
+      <Text style={styles.title}>Studieassistenten Premium</Text>
       <Text style={styles.subtitle}>
         Lås upp AI-funktionerna och lär dig snabbare med automatiskt genererat
         studiematerial från dina dokument.

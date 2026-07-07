@@ -18,7 +18,8 @@ import { useAuth } from '../../context/AuthContext';
 import { AppStackParamList } from '../../navigation/AppNavigator';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { UploadAnimation, type UploadPhase } from '../../components/UploadAnimation';
-import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
+import { ColorSwatchPicker } from '../../components/ColorSwatchPicker';
+import { colors, fontFamily, fontSize, spacing, radius, nextCourseColor } from '../../theme/tokens';
 import { canUpload, incrementUploads, getUsage, FREE_UPLOADS_PER_MONTH } from '../../lib/limits';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'CreateCourse'>;
@@ -27,6 +28,7 @@ export default function CreateCourseScreen({ navigation }: Props) {
   const { user } = useAuth();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [color, setColor] = useState(nextCourseColor([]));
   const [pdfFile, setPdfFile] = useState<{ uri: string; name: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadPhase, setUploadPhase] = useState<UploadPhase>('uploading');
@@ -34,6 +36,8 @@ export default function CreateCourseScreen({ navigation }: Props) {
 
   useEffect(() => {
     getUsage(user!.id).then((u) => setUploadsRemaining(u.uploadsRemaining));
+    supabase.from('courses').select('color').eq('user_id', user!.id)
+      .then(({ data }) => setColor(nextCourseColor((data ?? []).map(c => c.color))));
   }, []);
 
   const pickPdf = async () => {
@@ -87,7 +91,7 @@ export default function CreateCourseScreen({ navigation }: Props) {
       // 1. Skapa kurs
       const { data: course, error: courseErr } = await supabase
         .from('courses')
-        .insert({ name: name.trim(), description: description.trim() || null, user_id: user!.id })
+        .insert({ name: name.trim(), description: description.trim() || null, color, user_id: user!.id })
         .select()
         .single();
       if (courseErr) throw courseErr;
@@ -166,6 +170,11 @@ export default function CreateCourseScreen({ navigation }: Props) {
             onChangeText={setName}
             autoFocus
           />
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Färg</Text>
+          <ColorSwatchPicker value={color} onChange={setColor} />
         </View>
 
         <View style={styles.field}>

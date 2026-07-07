@@ -7,6 +7,7 @@ import Svg, { Circle } from 'react-native-svg';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { scheduleTimerNotif, cancelTimerNotif } from '../../lib/notifications';
+import { PressableScale } from '../../components/PressableScale';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 
 type Phase = 'work' | 'break';
@@ -14,11 +15,11 @@ type TimerState = 'idle' | 'running' | 'paused';
 
 const TIMER_KEY = 'focus_timer_state';
 const RADIUS = 88;
-const STROKE = 10;
+const STROKE = 16;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 const SIZE = (RADIUS + STROKE) * 2 + 4;
 
-type Course = { id: string; name: string };
+type Course = { id: string; name: string; color: string };
 
 export default function FocusScreen() {
   const { user } = useAuth();
@@ -45,7 +46,7 @@ export default function FocusScreen() {
           .eq('user_id', user!.id).maybeSingle(),
         supabase.from('focus_sessions').select('minutes')
           .eq('user_id', user!.id).gte('completed_at', new Date(Date.now() - 7 * 86400000).toISOString()),
-        supabase.from('courses').select('id, name').order('created_at'),
+        supabase.from('courses').select('id, name, color').order('created_at'),
       ]);
 
       if (settingsData) {
@@ -184,6 +185,8 @@ export default function FocusScreen() {
   const dashOffset = CIRCUMFERENCE * (1 - progress);
   const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
   const ss = String(remaining % 60).padStart(2, '0');
+  const selectedCourse = courses.find(c => c.id === courseId);
+  const ringColor = phase === 'work' ? (selectedCourse?.color ?? colors.highlight) : colors.sage;
 
   return (
     <ScrollView style={st.container} contentContainerStyle={st.content}>
@@ -228,7 +231,7 @@ export default function FocusScreen() {
       {/* Phase toggle */}
       <View style={st.phaseRow}>
         {(['work', 'break'] as Phase[]).map(p => (
-          <Pressable
+          <PressableScale
             key={p}
             style={[st.phaseBtn, phase === p && st.phaseBtnActive]}
             onPress={() => {
@@ -241,7 +244,7 @@ export default function FocusScreen() {
             <Text style={[st.phaseTxt, phase === p && st.phaseTxtActive]}>
               {p === 'work' ? `Fokus ${workMins}m` : `Paus ${breakMins}m`}
             </Text>
-          </Pressable>
+          </PressableScale>
         ))}
       </View>
 
@@ -255,7 +258,7 @@ export default function FocusScreen() {
           <Circle
             cx={SIZE / 2} cy={SIZE / 2} r={RADIUS}
             fill="none"
-            stroke={phase === 'work' ? colors.highlight : colors.sage}
+            stroke={ringColor}
             strokeWidth={STROKE}
             strokeDasharray={`${CIRCUMFERENCE} ${CIRCUMFERENCE}`}
             strokeDashoffset={dashOffset}
@@ -272,18 +275,18 @@ export default function FocusScreen() {
       {/* Controls */}
       <View style={st.controls}>
         {timerState === 'running' ? (
-          <Pressable style={st.btn} onPress={handlePause}>
+          <PressableScale style={st.btn} onPress={handlePause}>
             <Text style={st.btnTxt}>⏸  Pausa</Text>
-          </Pressable>
+          </PressableScale>
         ) : (
-          <Pressable style={st.btn} onPress={handleStart}>
+          <PressableScale style={st.btn} onPress={handleStart}>
             <Text style={st.btnTxt}>{timerState === 'paused' ? '▶  Fortsätt' : '▶  Starta'}</Text>
-          </Pressable>
+          </PressableScale>
         )}
         {timerState !== 'idle' && (
-          <Pressable style={st.resetBtn} onPress={handleReset}>
+          <PressableScale style={st.resetBtn} onPress={handleReset}>
             <Text style={st.resetTxt}>Återställ</Text>
-          </Pressable>
+          </PressableScale>
         )}
       </View>
 
@@ -292,24 +295,30 @@ export default function FocusScreen() {
         <View style={st.courseSection}>
           <Text style={st.sectionLbl}>KURS (valfritt)</Text>
           <View style={st.chipRow}>
-            <Pressable
+            <PressableScale
               style={[st.chip, !courseId && st.chipActive]}
               onPress={() => setCourseId(null)}
               disabled={timerState !== 'idle'}
             >
               <Text style={[st.chipTxt, !courseId && st.chipTxtActive]}>Ingen</Text>
-            </Pressable>
+            </PressableScale>
             {courses.map(c => (
-              <Pressable
+              <PressableScale
                 key={c.id}
-                style={[st.chip, courseId === c.id && st.chipActive]}
+                style={[
+                  st.chip,
+                  courseId === c.id && { backgroundColor: c.color, borderColor: c.color },
+                ]}
                 onPress={() => setCourseId(c.id)}
                 disabled={timerState !== 'idle'}
               >
-                <Text style={[st.chipTxt, courseId === c.id && st.chipTxtActive]} numberOfLines={1}>
+                <Text
+                  style={[st.chipTxt, courseId === c.id && st.chipTxtActive]}
+                  numberOfLines={1}
+                >
                   {c.name}
                 </Text>
-              </Pressable>
+              </PressableScale>
             ))}
           </View>
         </View>

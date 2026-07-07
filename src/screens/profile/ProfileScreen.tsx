@@ -6,7 +6,6 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
-import { HighlighterText } from '../../components/HighlighterText';
 import { getStreak } from '../../lib/streak';
 import { requestPermission, scheduleDailyReview, cancelDailyReview } from '../../lib/notifications';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
@@ -138,7 +137,7 @@ export default function ProfileScreen() {
   return (
     <ScrollView style={s.container} contentContainerStyle={s.content}>
       <View style={s.header}>
-        <HighlighterText textStyle={s.heading}>Profil</HighlighterText>
+        <Text style={s.heading}>Profil</Text>
         {user?.email && <Text style={s.email}>{user.email}</Text>}
       </View>
 

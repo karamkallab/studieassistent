@@ -2,7 +2,6 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppStackParamList } from '../../navigation/AppNavigator';
-import { HighlighterText } from '../../components/HighlighterText';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { colors, fontFamily, fontSize, spacing } from '../../theme/tokens';
 
@@ -21,7 +20,7 @@ export default function QuizResultScreen({ route, navigation }: Props) {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <HighlighterText textStyle={styles.headline}>{headline}</HighlighterText>
+        <Text style={styles.headline}>{headline}</Text>
 
         <View style={styles.scoreRow}>
           <Text style={styles.scoreNum}>{score}</Text>

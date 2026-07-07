@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   RefreshControl,
   ScrollView,
 } from 'react-native';
@@ -15,8 +14,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { AppStackParamList } from '../../navigation/AppNavigator';
-import { HighlighterText } from '../../components/HighlighterText';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { useConfirmDialog } from '../../components/ConfirmDialog';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 import { getUsage, FREE_UPLOADS_PER_MONTH } from '../../lib/limits';
 
@@ -38,6 +37,7 @@ export default function CourseScreen({ route, navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [generating, setGenerating] = useState<string | null>(null); // document_id being generated
+  const { confirm, element: confirmDialog } = useConfirmDialog();
 
   const fetchAll = useCallback(async () => {
     try {
@@ -65,7 +65,7 @@ export default function CourseScreen({ route, navigation }: Props) {
       setQuizCount(qs.length);
       setUploadsRemaining(usage.uploadsRemaining);
     } catch {
-      Alert.alert('Fel', 'Kunde inte hämta kursdata. Kontrollera din internetanslutning.');
+      confirm('Fel', 'Kunde inte hämta kursdata. Kontrollera din internetanslutning.', [{ text: 'OK' }]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -82,37 +82,46 @@ export default function CourseScreen({ route, navigation }: Props) {
       });
       if (error) throw new Error(error.message);
       await fetchAll();
-      Alert.alert('Klart!', 'Studiematerial har genererats.');
+      confirm('Klart!', 'Studiematerial har genererats.', [{ text: 'OK' }]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Genereringen misslyckades.';
-      Alert.alert('Fel', msg);
+      confirm('Fel', msg, [{ text: 'OK' }]);
     } finally {
       setGenerating(null);
     }
   };
 
   const handleDeleteQuizQuestion = (id: string) => {
-    Alert.alert('Ta bort fråga?', 'Det går inte att ångra.', [
+    confirm('Ta bort fråga?', 'Det går inte att ångra.', [
       { text: 'Avbryt', style: 'cancel' },
       {
         text: 'Ta bort', style: 'destructive',
         onPress: async () => {
-          const { error } = await supabase.from('quiz_questions').delete().eq('id', id);
-          if (error) Alert.alert('Fel', 'Kunde inte ta bort frågan.');
-          else setQuizQuestions((p) => p.filter((q) => q.id !== id));
+          const { data, error } = await supabase.from('quiz_questions').delete().eq('id', id).select('id');
+          if (error || !data?.length) {
+            console.error('Kunde inte ta bort frågan:', error);
+            confirm('Fel', 'Kunde inte ta bort frågan. Kontrollera din anslutning eller behörigheter.', [{ text: 'OK' }]);
+          } else {
+            setQuizQuestions((p) => p.filter((q) => q.id !== id));
+          }
         },
       },
     ]);
   };
 
   const handleDeleteCard = (id: string) => {
-    Alert.alert('Ta bort kort?', 'Det går inte att ångra.', [
+    confirm('Ta bort kort?', 'Det går inte att ångra.', [
       { text: 'Avbryt', style: 'cancel' },
       {
         text: 'Ta bort', style: 'destructive',
         onPress: async () => {
-          await supabase.from('flashcards').delete().eq('id', id);
-          setCards((p) => p.filter((c) => c.id !== id));
+          const { data, error } = await supabase.from('flashcards').delete().eq('id', id).select('id');
+          if (error || !data?.length) {
+            console.error('Kunde inte ta bort kortet:', error);
+            confirm('Fel', 'Kunde inte ta bort kortet. Kontrollera din anslutning eller behörigheter.', [{ text: 'OK' }]);
+          } else {
+            setCards((p) => p.filter((c) => c.id !== id));
+          }
         },
       },
     ]);
@@ -127,6 +136,7 @@ export default function CourseScreen({ route, navigation }: Props) {
   }
 
   return (
+    <>
     <FlatList
       style={styles.container}
       data={cards}
@@ -142,7 +152,7 @@ export default function CourseScreen({ route, navigation }: Props) {
       ListHeaderComponent={
         <View style={styles.headerArea}>
           {/* Kursrubrik */}
-          <HighlighterText textStyle={styles.title}>{courseName}</HighlighterText>
+          <Text style={styles.title}>{courseName}</Text>
 
           {/* Studiematerial-sektion */}
           {documents.length > 0 && (
@@ -277,6 +287,8 @@ export default function CourseScreen({ route, navigation }: Props) {
         </View>
       )}
     />
+    {confirmDialog}
+    </>
   );
 }
 

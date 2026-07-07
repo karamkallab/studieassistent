@@ -13,14 +13,16 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { supabase } from '../../lib/supabase';
 import { AppStackParamList } from '../../navigation/AppNavigator';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { ColorSwatchPicker } from '../../components/ColorSwatchPicker';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'EditCourse'>;
 
 export default function EditCourseScreen({ route, navigation }: Props) {
-  const { courseId, courseName, description: initialDesc } = route.params;
+  const { courseId, courseName, description: initialDesc, color: initialColor } = route.params;
   const [name, setName] = useState(courseName);
   const [description, setDescription] = useState(initialDesc);
+  const [color, setColor] = useState(initialColor);
   const [loading, setLoading] = useState(false);
 
   const handleSave = async () => {
@@ -31,7 +33,7 @@ export default function EditCourseScreen({ route, navigation }: Props) {
     setLoading(true);
     const { error } = await supabase
       .from('courses')
-      .update({ name: name.trim(), description: description.trim() || null })
+      .update({ name: name.trim(), description: description.trim() || null, color })
       .eq('id', courseId);
     setLoading(false);
     if (error) {
@@ -60,6 +62,11 @@ export default function EditCourseScreen({ route, navigation }: Props) {
             autoFocus
             selectTextOnFocus
           />
+        </View>
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Färg</Text>
+          <ColorSwatchPicker value={color} onChange={setColor} />
         </View>
 
         <View style={styles.field}>

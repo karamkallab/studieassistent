@@ -12,7 +12,7 @@ export type StudyPlan = {
   specific_date: string | null;
   recurring: boolean;
   excluded_dates: string[];
-  courses: { name: string } | null;
+  courses: { name: string; color: string } | null;
 };
 
 // Whether `plan` has an occurrence on `date`, honoring per-occurrence
@@ -28,7 +28,7 @@ export function occurrenceOn(plan: StudyPlan, date: Date): boolean {
   return false;
 }
 
-const PLAN_SELECT = 'id, title, time_of_day, duration_minutes, course_id, weekdays, specific_date, recurring, excluded_dates, courses(name)';
+const PLAN_SELECT = 'id, title, time_of_day, duration_minutes, course_id, weekdays, specific_date, recurring, excluded_dates, courses(name, color)';
 
 export function usePlanCompletions(userId: string | undefined) {
   const [plans, setPlans] = useState<StudyPlan[]>([]);

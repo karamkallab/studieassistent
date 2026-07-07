@@ -47,3 +47,22 @@ export const spacing = {
 const ROTATIONS = [-0.5, 0.3, -0.2, 0.4, -0.4, 0.2, 0.5, -0.3, 0, 0.1] as const;
 export const cardRotation = (index: number): number =>
   ROTATIONS[index % ROTATIONS.length];
+
+// Course color palette — assigned automatically to new courses, editable per course.
+export const courseColors = [
+  { name: 'indigo', hex: '#5B6ABF' },
+  { name: 'salvia', hex: '#6B8F71' },
+  { name: 'ockra', hex: '#C08552' },
+  { name: 'plommon', hex: '#8E5B7A' },
+  { name: 'petrol', hex: '#4A7A8C' },
+  { name: 'rost', hex: '#C1666B' },
+] as const;
+
+// First palette color not already used by an existing course; once all are
+// taken, cycles through the palette by course count.
+export function nextCourseColor(usedHexes: (string | null | undefined)[]): string {
+  const used = new Set(usedHexes.filter(Boolean));
+  const free = courseColors.find(c => !used.has(c.hex));
+  if (free) return free.hex;
+  return courseColors[usedHexes.length % courseColors.length].hex;
+}

@@ -51,6 +51,54 @@ En React Native-app (Expo + TypeScript) som hjälper studenter att förstå kurs
 
 Alla tabeller har Row Level Security – användare ser bara sin egen data.
 
+## Design
+
+Grunden är alltid papper/bläck: `colors.paper` (#F7F5F0) som bakgrund,
+`colors.ink` (#1D2A38) som text- och accentfärg, `serif`/`mono`-typsnitt
+för rubriker respektive metadata. Signaturgult (`colors.highlight`,
+#F4D35E) är medvetet sparsamt – se gul-regeln nedan.
+
+### Kursfärger
+
+Varje kurs har en egen färg (`courses.color`), vald från en fast palett:
+
+| Namn     | Hex       |
+|----------|-----------|
+| indigo   | `#5B6ABF` |
+| salvia   | `#6B8F71` |
+| ockra    | `#C08552` |
+| plommon  | `#8E5B7A` |
+| petrol   | `#4A7A8C` |
+| rost     | `#C1666B` |
+
+En ny kurs tilldelas automatiskt nästa lediga färg i paletten
+(`nextCourseColor()` i `theme/tokens.ts`) – först en färg ingen annan
+kurs använder, annars cyklas paletten. Färgen kan alltid ändras vid
+redigering av kursen.
+
+Kursfärgen syns överallt kursen förekommer:
+- 4px vänsterkant på studiepass-kort (Idag + Planera)
+- Ikonbricka (34px rundad kvadrat) på kurskort
+- Kursnamnet i pass-metadata
+- Progressbaren på kurskort (andel flashkort som inte är förfallna)
+- Kurs-chippen och timerringen i Fokustimern (när en kurs är vald)
+
+### Gul-regeln
+
+Signaturgult är reserverat för **max en meningsfull accent per skärm**
+– aldrig som dekoration bakom vanliga skärmrubriker. De accepterade
+platserna:
+- Streak-badgen (Kurser-vyn)
+- Aktiv dag i Planera-vyn (den lilla prick vid dagens datum)
+- Fokustimer-kortets progressring + play-ikon på Idag (ersätter den
+  gamla helgula bakgrunden)
+- Timerringen i Fokustimern, när ingen kurs är vald (annars tar
+  kursens egen färg över ringen)
+
+`HighlighterText` (den handritade gula överstrykningen, 350ms
+vänster→höger) används bara för Studieassistenten-logotypen på
+inloggningsskärmen – inte för skärmrubriker.
+
 ## Moduler
 
 ### Plugglägen (Etapp A)
@@ -71,8 +119,8 @@ Alla tabeller har Row Level Security – användare ser bara sin egen data.
 - Notisinställningar i Profil-vyn
 
 ### Fokustimer (Etapp D)
-- Pomodoro-timer 25/5 min (justerbart i Profil)
-- SVG-progressring i highlighter-gult/sage
+- Pomodoro-timer 25/5 min (justerbart direkt i Fokus-vyn)
+- SVG-progressring i highlighter-gult, eller vald kurs färg när en kurs är kopplad
 - Kopplas valfritt till kurs; fokussessioner sparas i `focus_sessions`
 - Timern överlever bakgrund via `AsyncStorage` + `AppState`
 - Veckostatistik för fokustid

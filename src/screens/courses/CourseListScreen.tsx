@@ -6,19 +6,21 @@ import {
   StyleSheet,
   TouchableOpacity,
   RefreshControl,
-  Alert,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import type { AppStackParamList } from '../../navigation/AppNavigator';
+import Animated from 'react-native-reanimated';
 import { CourseCard } from '../../components/CourseCard';
-import { HighlighterText } from '../../components/HighlighterText';
+import { useConfirmDialog } from '../../components/ConfirmDialog';
+import { PressableScale } from '../../components/PressableScale';
 import { getStreak } from '../../lib/streak';
+import { useStreakPulse } from '../../hooks/useStreakPulse';
 import { colors, fontFamily, fontSize, spacing } from '../../theme/tokens';
 
-type Course = { id: string; name: string; description: string | null; created_at: string };
+type Course = { id: string; name: string; description: string | null; created_at: string; color: string };
 
 export default function CourseListScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
@@ -27,18 +29,37 @@ export default function CourseListScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [streak, setStreak] = useState(0);
+  const [progressByCourse, setProgressByCourse] = useState<Record<string, number>>({});
+  const { confirm, element: confirmDialog } = useConfirmDialog();
+  const streakPulseStyle = useStreakPulse(streak);
 
   const fetchAll = useCallback(async () => {
     try {
-      const [{ data, error }, streakDays] = await Promise.all([
+      const [{ data, error }, { data: cardData }, streakDays] = await Promise.all([
         supabase.from('courses').select('*').order('created_at', { ascending: false }),
+        supabase.from('flashcards').select('course_id, next_review_at').eq('user_id', user!.id),
         getStreak(user!.id),
       ]);
-      if (error) Alert.alert('Fel', 'Kunde inte hämta kurser. Kontrollera din internetanslutning.');
+      if (error) confirm('Fel', 'Kunde inte hämta kurser. Kontrollera din internetanslutning.', [{ text: 'OK' }]);
       else setCourses(data ?? []);
+
+      const now = new Date();
+      const totals = new Map<string, { total: number; notOverdue: number }>();
+      for (const card of cardData ?? []) {
+        const entry = totals.get(card.course_id) ?? { total: 0, notOverdue: 0 };
+        entry.total++;
+        if (new Date(card.next_review_at) > now) entry.notOverdue++;
+        totals.set(card.course_id, entry);
+      }
+      const progress: Record<string, number> = {};
+      for (const [courseId, { total, notOverdue }] of totals) {
+        progress[courseId] = notOverdue / total;
+      }
+      setProgressByCourse(progress);
+
       setStreak(streakDays);
     } catch {
-      Alert.alert('Fel', 'Något gick fel. Försök igen.');
+      confirm('Fel', 'Något gick fel. Försök igen.', [{ text: 'OK' }]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -49,16 +70,39 @@ export default function CourseListScreen() {
 
   const onRefresh = () => { setRefreshing(true); fetchAll(); };
 
+  const handleDeleteCourse = (item: Course) => {
+    confirm(
+      'Ta bort kurs?',
+      `"${item.name}" och allt innehåll (flashkort, quiz, mindmaps) raderas permanent.`,
+      [
+        { text: 'Avbryt', style: 'cancel' },
+        {
+          text: 'Ta bort',
+          style: 'destructive',
+          onPress: async () => {
+            const { data, error } = await supabase.from('courses').delete().eq('id', item.id).select('id');
+            if (error || !data?.length) {
+              console.error('Kunde inte ta bort kursen:', error);
+              confirm('Fel', 'Kunde inte ta bort kursen. Kontrollera din anslutning eller behörigheter.', [{ text: 'OK' }]);
+            } else {
+              setCourses((prev) => prev.filter((c) => c.id !== item.id));
+            }
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <HighlighterText textStyle={styles.heading}>Mina kurser</HighlighterText>
+          <Text style={styles.heading}>Mina kurser</Text>
         </View>
         {streak > 0 && (
-          <View style={styles.streakBadge}>
+          <Animated.View style={[styles.streakBadge, streakPulseStyle]}>
             <Text style={styles.streakText}>{streak} {streak === 1 ? 'dag' : 'dagar'} i rad</Text>
-          </View>
+          </Animated.View>
         )}
       </View>
 
@@ -94,51 +138,40 @@ export default function CourseListScreen() {
           <CourseCard
             course={item}
             index={index}
+            progress={progressByCourse[item.id] ?? null}
             onPress={() => navigation.navigate('Course', { courseId: item.id, courseName: item.name })}
             onLongPress={() => {
-              Alert.alert(item.name, 'Vad vill du göra?', [
+              confirm(item.name, 'Vad vill du göra?', [
+                { text: 'Avbryt', style: 'cancel' },
                 {
                   text: 'Redigera kurs',
                   onPress: () => navigation.navigate('EditCourse', {
                     courseId: item.id,
                     courseName: item.name,
                     description: item.description ?? '',
+                    color: item.color,
                   }),
                 },
                 {
                   text: 'Ta bort kurs',
                   style: 'destructive',
-                  onPress: () => Alert.alert(
-                    'Ta bort kurs?',
-                    `"${item.name}" och allt innehåll (flashkort, quiz, mindmaps) raderas permanent.`,
-                    [
-                      { text: 'Avbryt', style: 'cancel' },
-                      {
-                        text: 'Ta bort',
-                        style: 'destructive',
-                        onPress: async () => {
-                          const { error } = await supabase.from('courses').delete().eq('id', item.id);
-                          if (error) Alert.alert('Fel', 'Kunde inte ta bort kursen.');
-                          else setCourses((prev) => prev.filter((c) => c.id !== item.id));
-                        },
-                      },
-                    ],
-                  ),
+                  onPress: () => handleDeleteCourse(item),
                 },
-                { text: 'Avbryt', style: 'cancel' },
               ]);
             }}
+            onDelete={() => handleDeleteCourse(item)}
           />
         )}
       />
 
-      <TouchableOpacity
+      <PressableScale
         style={styles.fab}
         onPress={() => navigation.navigate('CreateCourse')}
-        activeOpacity={0.85}
       >
         <Text style={styles.fabText}>+</Text>
-      </TouchableOpacity>
+      </PressableScale>
+
+      {confirmDialog}
     </View>
   );
 }
