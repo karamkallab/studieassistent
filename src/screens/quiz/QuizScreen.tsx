@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
-  ScrollView,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -17,6 +16,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { AppStackParamList } from '../../navigation/AppNavigator';
+import { ScreenContainer } from '../../components/ScreenContainer';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 
 type QuizQuestion = {
@@ -163,45 +163,45 @@ export default function QuizScreen({ route, navigation }: Props) {
   const progress = ((currentIndex + 1) / questions.length) * 100;
 
   return (
-    <View style={styles.container}>
-      {/* Top bar */}
-      <View style={styles.topBar}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.closeBtn}>
-          <Text style={styles.closeBtnText}>✕</Text>
-        </Pressable>
-        <View style={styles.progressBg}>
-          <View style={[styles.progressFill, { width: `${progress}%` }]} />
+    <ScreenContainer
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+      header={
+        <View style={styles.topBar}>
+          <Pressable onPress={() => navigation.goBack()} style={styles.closeBtn}>
+            <Text style={styles.closeBtnText}>✕</Text>
+          </Pressable>
+          <View style={styles.progressBg}>
+            <View style={[styles.progressFill, { width: `${progress}%` }]} />
+          </View>
+          <Text style={styles.counter}>{currentIndex + 1}/{questions.length}</Text>
         </View>
-        <Text style={styles.counter}>{currentIndex + 1}/{questions.length}</Text>
+      }
+    >
+      {/* Question card */}
+      <View style={styles.questionCard}>
+        <Text style={styles.questionLabel}>FRÅGA</Text>
+        <Text style={styles.questionText}>{current.question}</Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {/* Question card */}
-        <View style={styles.questionCard}>
-          <Text style={styles.questionLabel}>FRÅGA</Text>
-          <Text style={styles.questionText}>{current.question}</Text>
-        </View>
-
-        {/* Options */}
-        <View style={styles.options}>
-          {current.options.map((opt, i) => (
-            <OptionButton
-              key={i}
-              label={OPTION_LABELS[i]}
-              text={opt}
-              state={getState(opt)}
-              onPress={() => handleAnswer(opt)}
-              reduceMotion={reduceMotion}
-            />
-          ))}
-        </View>
-      </ScrollView>
-    </View>
+      {/* Options */}
+      <View style={styles.options}>
+        {current.options.map((opt, i) => (
+          <OptionButton
+            key={i}
+            label={OPTION_LABELS[i]}
+            text={opt}
+            state={getState(opt)}
+            onPress={() => handleAnswer(opt)}
+            reduceMotion={reduceMotion}
+          />
+        ))}
+      </View>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.paper },
   center: {
     flex: 1, backgroundColor: colors.paper,
     alignItems: 'center', justifyContent: 'center',

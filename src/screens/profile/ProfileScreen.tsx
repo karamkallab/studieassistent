@@ -1,11 +1,12 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity,
+  View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, Switch, Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { ScreenContainer } from '../../components/ScreenContainer';
 import { getStreak } from '../../lib/streak';
 import { requestPermission, scheduleDailyReview, cancelDailyReview } from '../../lib/notifications';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
@@ -135,7 +136,7 @@ export default function ProfileScreen() {
   }
 
   return (
-    <ScrollView style={s.container} contentContainerStyle={s.content}>
+    <ScreenContainer contentContainerStyle={s.content}>
       <View style={s.header}>
         <Text style={s.heading}>Profil</Text>
         {user?.email && <Text style={s.email}>{user.email}</Text>}
@@ -240,12 +241,11 @@ export default function ProfileScreen() {
       >
         <Text style={s.signOutTxt}>Logga ut</Text>
       </TouchableOpacity>
-    </ScrollView>
+    </ScreenContainer>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.paper },
   content: { padding: spacing.md, gap: spacing.lg, paddingBottom: spacing['2xl'] },
   center: { flex: 1, backgroundColor: colors.paper, justifyContent: 'center', alignItems: 'center' },
 

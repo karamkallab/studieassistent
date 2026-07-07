@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, TextInput, StyleSheet, Pressable,
-  ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
+  ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withTiming, useReducedMotion,
@@ -11,6 +11,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { AppStackParamList } from '../../navigation/AppNavigator';
 import { sm2 } from '../../lib/sm2';
+import { ScreenContainer } from '../../components/ScreenContainer';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 
 type Flashcard = {
@@ -134,84 +135,84 @@ export default function WriteScreen({ route, navigation }: Props) {
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={styles.container}>
-        {/* Top bar */}
-        <View style={styles.topBar}>
-          <Pressable onPress={() => navigation.goBack()} style={styles.closeBtn}>
-            <Text style={styles.closeTxt}>✕</Text>
-          </Pressable>
-          <View style={styles.progressBg}>
-            <View style={[styles.progressFill, { width: `${((idx + 1) / cards.length) * 100}%` }]} />
+      <ScreenContainer
+        contentContainerStyle={styles.body}
+        keyboardShouldPersistTaps="handled"
+        header={
+          <View style={styles.topBar}>
+            <Pressable onPress={() => navigation.goBack()} style={styles.closeBtn}>
+              <Text style={styles.closeTxt}>✕</Text>
+            </Pressable>
+            <View style={styles.progressBg}>
+              <View style={[styles.progressFill, { width: `${((idx + 1) / cards.length) * 100}%` }]} />
+            </View>
+            <Text style={styles.counter}>{idx + 1}/{cards.length}</Text>
           </View>
-          <Text style={styles.counter}>{idx + 1}/{cards.length}</Text>
+        }
+      >
+        <Animated.View style={[styles.questionCard, cardStyle]}>
+          <Text style={styles.sideLabel}>FRÅGA</Text>
+          <Text style={styles.questionText}>{card.question}</Text>
+        </Animated.View>
+
+        {/* Answer input */}
+        <View style={[styles.answerBox, { borderColor: bgColor === colors.cardBg ? colors.cardBorder : bgColor }]}>
+          <TextInput
+            style={[styles.answerInput, { color: result !== 'idle' ? bgColor : colors.ink }]}
+            placeholder="Skriv ditt svar..."
+            placeholderTextColor={colors.inkMuted}
+            value={input}
+            onChangeText={setInput}
+            editable={result === 'idle'}
+            multiline
+            onSubmitEditing={handleCheck}
+            returnKeyType="done"
+            blurOnSubmit
+          />
         </View>
 
-        <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-          <Animated.View style={[styles.questionCard, cardStyle]}>
-            <Text style={styles.sideLabel}>FRÅGA</Text>
-            <Text style={styles.questionText}>{card.question}</Text>
-          </Animated.View>
-
-          {/* Answer input */}
-          <View style={[styles.answerBox, { borderColor: bgColor === colors.cardBg ? colors.cardBorder : bgColor }]}>
-            <TextInput
-              style={[styles.answerInput, { color: result !== 'idle' ? bgColor : colors.ink }]}
-              placeholder="Skriv ditt svar..."
-              placeholderTextColor={colors.inkMuted}
-              value={input}
-              onChangeText={setInput}
-              editable={result === 'idle'}
-              multiline
-              onSubmitEditing={handleCheck}
-              returnKeyType="done"
-              blurOnSubmit
-            />
+        {/* Show correct answer on wrong */}
+        {result === 'wrong' && (
+          <View style={styles.correctBox}>
+            <Text style={styles.correctLabel}>Rätt svar:</Text>
+            <Text style={styles.correctText}>{card.answer}</Text>
           </View>
+        )}
 
-          {/* Show correct answer on wrong */}
-          {result === 'wrong' && (
-            <View style={styles.correctBox}>
-              <Text style={styles.correctLabel}>Rätt svar:</Text>
-              <Text style={styles.correctText}>{card.answer}</Text>
-            </View>
-          )}
+        {/* Result tag */}
+        {result !== 'idle' && (
+          <View style={[styles.resultTag, { backgroundColor: bgColor }]}>
+            <Text style={styles.resultTagText}>
+              {result === 'correct' ? '✓ Rätt!' : '✗ Fel'}
+            </Text>
+          </View>
+        )}
 
-          {/* Result tag */}
-          {result !== 'idle' && (
-            <View style={[styles.resultTag, { backgroundColor: bgColor }]}>
-              <Text style={styles.resultTagText}>
-                {result === 'correct' ? '✓ Rätt!' : '✗ Fel'}
+        {/* Buttons */}
+        <View style={styles.actions}>
+          {result === 'idle' ? (
+            <Pressable
+              style={[styles.btn, !input.trim() && styles.btnDisabled]}
+              onPress={handleCheck}
+              disabled={!input.trim()}
+            >
+              <Text style={styles.btnTxt}>Kontrollera</Text>
+            </Pressable>
+          ) : (
+            <Pressable style={styles.btn} onPress={handleNext}>
+              <Text style={styles.btnTxt}>
+                {idx + 1 < cards.length ? 'Nästa →' : 'Klar'}
               </Text>
-            </View>
+            </Pressable>
           )}
-
-          {/* Buttons */}
-          <View style={styles.actions}>
-            {result === 'idle' ? (
-              <Pressable
-                style={[styles.btn, !input.trim() && styles.btnDisabled]}
-                onPress={handleCheck}
-                disabled={!input.trim()}
-              >
-                <Text style={styles.btnTxt}>Kontrollera</Text>
-              </Pressable>
-            ) : (
-              <Pressable style={styles.btn} onPress={handleNext}>
-                <Text style={styles.btnTxt}>
-                  {idx + 1 < cards.length ? 'Nästa →' : 'Klar'}
-                </Text>
-              </Pressable>
-            )}
-          </View>
-        </ScrollView>
-      </View>
+        </View>
+      </ScreenContainer>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  container: { flex: 1, backgroundColor: colors.paper },
   center: { flex: 1, backgroundColor: colors.paper, justifyContent: 'center', alignItems: 'center', padding: spacing.xl, gap: spacing.md },
   emptyTitle: { fontFamily: fontFamily.bodySemiBold, fontSize: fontSize.lg, color: colors.ink },
   emptyBody: { fontFamily: fontFamily.body, fontSize: fontSize.base, color: colors.inkMuted, textAlign: 'center' },

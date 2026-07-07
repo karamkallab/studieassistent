@@ -22,6 +22,7 @@ import { useAuth } from '../../context/AuthContext';
 import { AppStackParamList } from '../../navigation/AppNavigator';
 import { sm2 } from '../../lib/sm2';
 import { updateStreak } from '../../lib/streak';
+import { ScreenContainer } from '../../components/ScreenContainer';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 
 type Flashcard = {
@@ -236,15 +237,18 @@ export default function ReviewScreen({ route, navigation }: Props) {
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.topBar}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.closeBtn}>
-          <Text style={styles.closeBtnText}>✕</Text>
-        </Pressable>
-        <Text style={styles.courseName} numberOfLines={1}>{courseName}</Text>
-        <View style={styles.closeBtnPlaceholder} />
-      </View>
-
+    <ScreenContainer
+      scroll={false}
+      header={
+        <View style={styles.topBar}>
+          <Pressable onPress={() => navigation.goBack()} style={styles.closeBtn}>
+            <Text style={styles.closeBtnText}>✕</Text>
+          </Pressable>
+          <Text style={styles.courseName} numberOfLines={1}>{courseName}</Text>
+          <View style={styles.closeBtnPlaceholder} />
+        </View>
+      }
+    >
       <FlashCard
         key={cardKey}
         card={cards[currentIndex]}
@@ -253,14 +257,13 @@ export default function ReviewScreen({ route, navigation }: Props) {
         onGrade={handleGrade}
         reduceMotion={reduceMotion ?? false}
       />
-    </View>
+    </ScreenContainer>
   );
 }
 
 const CARD_H = 260;
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.paper },
   center: {
     flex: 1,
     backgroundColor: colors.paper,

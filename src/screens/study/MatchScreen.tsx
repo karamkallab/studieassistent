@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  View, Text, StyleSheet, Pressable, ActivityIndicator, ScrollView,
+  View, Text, StyleSheet, Pressable, ActivityIndicator,
 } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withTiming, withSequence, runOnJS,
@@ -10,6 +10,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { AppStackParamList } from '../../navigation/AppNavigator';
+import { ScreenContainer } from '../../components/ScreenContainer';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 
 type Flashcard = { id: string; question: string; answer: string };
@@ -226,73 +227,74 @@ export default function MatchScreen({ route, navigation }: Props) {
   if (finished) {
     const isNewBest = bestTime !== null && elapsed <= bestTime;
     return (
-      <View style={styles.finishContainer}>
-        <Text style={styles.finishEmoji}>⚡</Text>
-        <Text style={styles.finishTitle}>Klart!</Text>
-        <Text style={styles.finishTime}>{formatTime(elapsed)}</Text>
-        {isNewBest && <Text style={styles.newBest}>Nytt rekord!</Text>}
-        {bestTime !== null && !isNewBest && (
-          <Text style={styles.prevBest}>Bästa tid: {formatTime(bestTime)}</Text>
-        )}
-        <View style={styles.finishActions}>
-          <Pressable style={styles.btn} onPress={() => initBatch(allCards)}>
-            <Text style={styles.btnTxt}>Spela igen</Text>
-          </Pressable>
-          <Pressable style={styles.btnGhost} onPress={() => navigation.goBack()}>
-            <Text style={styles.btnGhostTxt}>Tillbaka</Text>
-          </Pressable>
+      <ScreenContainer scroll={false}>
+        <View style={styles.finishContainer}>
+          <Text style={styles.finishEmoji}>⚡</Text>
+          <Text style={styles.finishTitle}>Klart!</Text>
+          <Text style={styles.finishTime}>{formatTime(elapsed)}</Text>
+          {isNewBest && <Text style={styles.newBest}>Nytt rekord!</Text>}
+          {bestTime !== null && !isNewBest && (
+            <Text style={styles.prevBest}>Bästa tid: {formatTime(bestTime)}</Text>
+          )}
+          <View style={styles.finishActions}>
+            <Pressable style={styles.btn} onPress={() => initBatch(allCards)}>
+              <Text style={styles.btnTxt}>Spela igen</Text>
+            </Pressable>
+            <Pressable style={styles.btnGhost} onPress={() => navigation.goBack()}>
+              <Text style={styles.btnGhostTxt}>Tillbaka</Text>
+            </Pressable>
+          </View>
         </View>
-      </View>
+      </ScreenContainer>
     );
   }
 
   return (
-    <View style={styles.container}>
-      {/* Top bar */}
-      <View style={styles.topBar}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.closeBtn}>
-          <Text style={styles.closeTxt}>✕</Text>
-        </Pressable>
-        <Text style={styles.timerText}>{formatTime(elapsed)}</Text>
-        {bestTime !== null && (
-          <Text style={styles.bestText}>Bäst {formatTime(bestTime)}</Text>
-        )}
+    <ScreenContainer
+      contentContainerStyle={styles.grid}
+      header={
+        <View style={styles.topBar}>
+          <Pressable onPress={() => navigation.goBack()} style={styles.closeBtn}>
+            <Text style={styles.closeTxt}>✕</Text>
+          </Pressable>
+          <Text style={styles.timerText}>{formatTime(elapsed)}</Text>
+          {bestTime !== null && (
+            <Text style={styles.bestText}>Bäst {formatTime(bestTime)}</Text>
+          )}
+        </View>
+      }
+    >
+      <View style={styles.col}>
+        <Text style={styles.colLabel}>FRÅGOR</Text>
+        {questions.map(q => (
+          <MatchCard
+            key={q.id}
+            text={q.question}
+            side="q"
+            state={getQState(q.id) as any}
+            onPress={() => handleQ(q.id)}
+            reduceMotion={reduceMotion}
+          />
+        ))}
       </View>
-
-      <ScrollView contentContainerStyle={styles.grid}>
-        <View style={styles.col}>
-          <Text style={styles.colLabel}>FRÅGOR</Text>
-          {questions.map(q => (
-            <MatchCard
-              key={q.id}
-              text={q.question}
-              side="q"
-              state={getQState(q.id) as any}
-              onPress={() => handleQ(q.id)}
-              reduceMotion={reduceMotion}
-            />
-          ))}
-        </View>
-        <View style={styles.col}>
-          <Text style={styles.colLabel}>SVAR</Text>
-          {answers.map(a => (
-            <MatchCard
-              key={a.id}
-              text={a.answer}
-              side="a"
-              state={getAState(a.id) as any}
-              onPress={() => handleA(a.id)}
-              reduceMotion={reduceMotion}
-            />
-          ))}
-        </View>
-      </ScrollView>
-    </View>
+      <View style={styles.col}>
+        <Text style={styles.colLabel}>SVAR</Text>
+        {answers.map(a => (
+          <MatchCard
+            key={a.id}
+            text={a.answer}
+            side="a"
+            state={getAState(a.id) as any}
+            onPress={() => handleA(a.id)}
+            reduceMotion={reduceMotion}
+          />
+        ))}
+      </View>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.paper },
   center: { flex: 1, backgroundColor: colors.paper, justifyContent: 'center', alignItems: 'center', padding: spacing.xl, gap: spacing.md },
   emptyTitle: { fontFamily: fontFamily.bodySemiBold, fontSize: fontSize.lg, color: colors.ink },
   emptyBody: { fontFamily: fontFamily.body, fontSize: fontSize.base, color: colors.inkMuted, textAlign: 'center' },
@@ -313,7 +315,7 @@ const styles = StyleSheet.create({
   },
   matchText: { fontFamily: fontFamily.body, fontSize: fontSize.sm, lineHeight: 18, textAlign: 'center' },
 
-  finishContainer: { flex: 1, backgroundColor: colors.paper, justifyContent: 'center', alignItems: 'center', gap: spacing.md, padding: spacing.xl },
+  finishContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: spacing.md, padding: spacing.xl },
   finishEmoji: { fontSize: 48 },
   finishTitle: { fontFamily: fontFamily.serif, fontSize: fontSize['3xl'], color: colors.ink },
   finishTime: { fontFamily: fontFamily.mono, fontSize: fontSize['2xl'], color: colors.ink },

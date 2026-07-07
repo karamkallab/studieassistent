@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity,
+  View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -14,6 +14,7 @@ import { MonthCalendarModal } from '../../components/MonthCalendarModal';
 import { StaggerIn } from '../../components/StaggerIn';
 import { PressableScale } from '../../components/PressableScale';
 import { AnimatedCheck } from '../../components/AnimatedCheck';
+import { ScreenContainer } from '../../components/ScreenContainer';
 import { cancelStudyPlan } from '../../lib/notifications';
 import { usePlanCompletions, occurrenceOn, type StudyPlan } from '../../hooks/usePlanCompletions';
 import { localDateStr, dbDayIndex, mondayOf } from '../../lib/dates';
@@ -190,44 +191,74 @@ export default function PlanScreen() {
   let planCardIndex = 0;
 
   return (
-    <View style={s.container}>
-      {/* Header */}
-      <View style={s.header}>
-        <Text style={s.heading}>Planera</Text>
-        <View style={s.weekNav}>
-          <TouchableOpacity
-            onPress={() => setAnchorDate(d => { const n = new Date(d); n.setDate(n.getDate() - 7); return n; })}
-            style={s.weekBtn}
-          >
-            <Text style={s.weekBtnTxt}>‹</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setCalendarOpen(true)} style={s.weekLabelBtn}>
-            <Text style={s.weekLabel}>{weekLabel()}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setAnchorDate(d => { const n = new Date(d); n.setDate(n.getDate() + 7); return n; })}
-            style={s.weekBtn}
-          >
-            <Text style={s.weekBtnTxt}>›</Text>
-          </TouchableOpacity>
+    <ScreenContainer
+      contentContainerStyle={s.scroll}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => { setRefreshing(true); fetchAll(); }}
+          tintColor={colors.ink}
+        />
+      }
+      header={
+        <View style={s.header}>
+          <Text style={s.heading}>Planera</Text>
+          <View style={s.weekNav}>
+            <TouchableOpacity
+              onPress={() => setAnchorDate(d => { const n = new Date(d); n.setDate(n.getDate() - 7); return n; })}
+              style={s.weekBtn}
+            >
+              <Text style={s.weekBtnTxt}>‹</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setCalendarOpen(true)} style={s.weekLabelBtn}>
+              <Text style={s.weekLabel}>{weekLabel()}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setAnchorDate(d => { const n = new Date(d); n.setDate(n.getDate() + 7); return n; })}
+              style={s.weekBtn}
+            >
+              <Text style={s.weekBtnTxt}>›</Text>
+            </TouchableOpacity>
+          </View>
+          {totalForWeek > 0 && (
+            <Text style={s.weekProgress}>
+              {doneForWeek} av {totalForWeek} pass klara denna vecka
+            </Text>
+          )}
         </View>
-        {totalForWeek > 0 && (
-          <Text style={s.weekProgress}>
-            {doneForWeek} av {totalForWeek} pass klara denna vecka
-          </Text>
-        )}
-      </View>
+      }
+      overlay={
+        <>
+          {/* FAB */}
+          <PressableScale
+            style={s.fab}
+            onPress={() => navigation.navigate('CreatePlan', {})}
+          >
+            <Text style={s.fabTxt}>+</Text>
+          </PressableScale>
 
-      <ScrollView
-        contentContainerStyle={s.scroll}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => { setRefreshing(true); fetchAll(); }}
-            tintColor={colors.ink}
+          {/* Undo toast */}
+          {pendingDelete && (
+            <View style={s.toast}>
+              <Text style={s.toastTxt} numberOfLines={1}>Passet togs bort</Text>
+              <TouchableOpacity onPress={undoDelete}>
+                <Text style={s.toastUndo}>ÅNGRA</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {confirmDialog}
+
+          <MonthCalendarModal
+            visible={calendarOpen}
+            onClose={() => setCalendarOpen(false)}
+            initialMonth={anchorDate}
+            onSelectDate={setAnchorDate}
+            hasPlansOn={hasPlansOn}
           />
-        }
-      >
+        </>
+      }
+    >
         {totalForWeek === 0 ? (
           <View style={s.emptyWeek}>
             <Text style={s.emptyWeekIcon}>📅</Text>
@@ -298,41 +329,11 @@ export default function PlanScreen() {
             </View>
           );
         })}
-      </ScrollView>
-
-      {/* FAB */}
-      <PressableScale
-        style={s.fab}
-        onPress={() => navigation.navigate('CreatePlan', {})}
-      >
-        <Text style={s.fabTxt}>+</Text>
-      </PressableScale>
-
-      {/* Undo toast */}
-      {pendingDelete && (
-        <View style={s.toast}>
-          <Text style={s.toastTxt} numberOfLines={1}>Passet togs bort</Text>
-          <TouchableOpacity onPress={undoDelete}>
-            <Text style={s.toastUndo}>ÅNGRA</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {confirmDialog}
-
-      <MonthCalendarModal
-        visible={calendarOpen}
-        onClose={() => setCalendarOpen(false)}
-        initialMonth={anchorDate}
-        onSelectDate={setAnchorDate}
-        hasPlansOn={hasPlansOn}
-      />
-    </View>
+    </ScreenContainer>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.paper },
   center: { flex: 1, backgroundColor: colors.paper, justifyContent: 'center', alignItems: 'center' },
 
   header: {

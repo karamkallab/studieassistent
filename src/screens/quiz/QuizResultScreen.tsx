@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppStackParamList } from '../../navigation/AppNavigator';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { ScreenContainer } from '../../components/ScreenContainer';
 import { colors, fontFamily, fontSize, spacing } from '../../theme/tokens';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'QuizResult'>;
@@ -18,7 +19,7 @@ export default function QuizResultScreen({ route, navigation }: Props) {
     'Öva mer!';
 
   return (
-    <View style={styles.container}>
+    <ScreenContainer scroll={false} contentContainerStyle={styles.container}>
       <View style={styles.content}>
         <Text style={styles.headline}>{headline}</Text>
 
@@ -49,13 +50,12 @@ export default function QuizResultScreen({ route, navigation }: Props) {
           variant="ghost"
         />
       </View>
-    </View>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1, backgroundColor: colors.paper,
     justifyContent: 'space-between',
     padding: spacing.xl,
     paddingTop: spacing['2xl'] * 1.5,

@@ -2,7 +2,6 @@ import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
-  FlatList,
   StyleSheet,
   TouchableOpacity,
   RefreshControl,
@@ -16,6 +15,7 @@ import Animated from 'react-native-reanimated';
 import { CourseCard } from '../../components/CourseCard';
 import { useConfirmDialog } from '../../components/ConfirmDialog';
 import { PressableScale } from '../../components/PressableScale';
+import { ScreenContainer } from '../../components/ScreenContainer';
 import { getStreak } from '../../lib/streak';
 import { useStreakPulse } from '../../hooks/useStreakPulse';
 import { colors, fontFamily, fontSize, spacing } from '../../theme/tokens';
@@ -94,48 +94,54 @@ export default function CourseListScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <Text style={styles.heading}>Mina kurser</Text>
+    <ScreenContainer
+      contentContainerStyle={styles.list}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={colors.ink}
+          colors={[colors.ink]}
+        />
+      }
+      header={
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <Text style={styles.heading}>Mina kurser</Text>
+          </View>
+          {streak > 0 && (
+            <Animated.View style={[styles.streakBadge, streakPulseStyle]}>
+              <Text style={styles.streakText}>{streak} {streak === 1 ? 'dag' : 'dagar'} i rad</Text>
+            </Animated.View>
+          )}
         </View>
-        {streak > 0 && (
-          <Animated.View style={[styles.streakBadge, streakPulseStyle]}>
-            <Text style={styles.streakText}>{streak} {streak === 1 ? 'dag' : 'dagar'} i rad</Text>
-          </Animated.View>
-        )}
-      </View>
-
-      <FlatList
-        data={courses}
-        keyExtractor={(c) => c.id}
-        contentContainerStyle={styles.list}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.ink}
-            colors={[colors.ink]}
-          />
-        }
-        ListEmptyComponent={
-          !loading ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>Inga kurser ännu</Text>
-              <Text style={styles.emptySubtitle}>
-                Skapa din första kurs för att komma igång. Du kan ladda upp ett PDF-dokument och låta appen generera flashkort, quiz och sammanfattning automatiskt.
-              </Text>
-              <TouchableOpacity
-                style={styles.emptyBtn}
-                onPress={() => navigation.navigate('CreateCourse')}
-              >
-                <Text style={styles.emptyBtnText}>Skapa en kurs</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null
-        }
-        renderItem={({ item, index }) => (
+      }
+      overlay={
+        <PressableScale
+          style={styles.fab}
+          onPress={() => navigation.navigate('CreateCourse')}
+        >
+          <Text style={styles.fabText}>+</Text>
+        </PressableScale>
+      }
+    >
+      {courses.length === 0 && !loading ? (
+        <View style={styles.empty}>
+          <Text style={styles.emptyTitle}>Inga kurser ännu</Text>
+          <Text style={styles.emptySubtitle}>
+            Skapa din första kurs för att komma igång. Du kan ladda upp ett PDF-dokument och låta appen generera flashkort, quiz och sammanfattning automatiskt.
+          </Text>
+          <TouchableOpacity
+            style={styles.emptyBtn}
+            onPress={() => navigation.navigate('CreateCourse')}
+          >
+            <Text style={styles.emptyBtnText}>Skapa en kurs</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        courses.map((item, index) => (
           <CourseCard
+            key={item.id}
             course={item}
             index={index}
             progress={progressByCourse[item.id] ?? null}
@@ -161,23 +167,15 @@ export default function CourseListScreen() {
             }}
             onDelete={() => handleDeleteCourse(item)}
           />
-        )}
-      />
-
-      <PressableScale
-        style={styles.fab}
-        onPress={() => navigation.navigate('CreateCourse')}
-      >
-        <Text style={styles.fabText}>+</Text>
-      </PressableScale>
+        ))
+      )}
 
       {confirmDialog}
-    </View>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.paper },
   header: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.xl,

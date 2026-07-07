@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text, ScrollView } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { AppStackParamList } from '../../navigation/AppNavigator';
+import { ScreenContainer } from '../../components/ScreenContainer';
 import { colors, fontFamily, fontSize, spacing } from '../../theme/tokens';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'Summary'>;
@@ -53,14 +54,13 @@ export default function SummaryScreen({ route }: Props) {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScreenContainer contentContainerStyle={styles.content}>
       <Markdown style={markdownStyles}>{content}</Markdown>
-    </ScrollView>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.paper },
   content: { padding: spacing.xl, paddingBottom: spacing['2xl'] },
   center: {
     flex: 1, backgroundColor: colors.paper,

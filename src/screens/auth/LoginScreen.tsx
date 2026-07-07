@@ -8,13 +8,13 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { supabase } from '../../lib/supabase';
 import { AuthStackParamList } from '../../navigation/AppNavigator';
 import { HighlighterText } from '../../components/HighlighterText';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { ScreenContainer } from '../../components/ScreenContainer';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
@@ -40,76 +40,80 @@ export default function LoginScreen({ navigation }: Props) {
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView
-        contentContainerStyle={styles.container}
+      <ScreenContainer
+        contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.header}>
-          <HighlighterText
-            textStyle={styles.title}
-          >
-            Studie
-          </HighlighterText>
-          <Text style={styles.titleSuffix}>assistenten</Text>
-          <Text style={styles.subtitle}>Din personliga studieassistent</Text>
-        </View>
-
-        <View style={styles.form}>
-          <View style={styles.field}>
-            <Text style={styles.label}>E-postadress</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="namn@exempel.se"
-              placeholderTextColor={colors.inkMuted}
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              autoComplete="email"
-            />
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <HighlighterText
+              textStyle={styles.title}
+            >
+              Studie
+            </HighlighterText>
+            <Text style={styles.titleSuffix}>assistenten</Text>
+            <Text style={styles.subtitle}>Din personliga studieassistent</Text>
           </View>
 
-          <View style={styles.field}>
-            <Text style={styles.label}>Lösenord</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="••••••••"
-              placeholderTextColor={colors.inkMuted}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoComplete="password"
+          <View style={styles.form}>
+            <View style={styles.field}>
+              <Text style={styles.label}>E-postadress</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="namn@exempel.se"
+                placeholderTextColor={colors.inkMuted}
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoComplete="email"
+              />
+            </View>
+
+            <View style={styles.field}>
+              <Text style={styles.label}>Lösenord</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="••••••••"
+                placeholderTextColor={colors.inkMuted}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                autoComplete="password"
+              />
+            </View>
+
+            <PrimaryButton
+              label="Logga in"
+              onPress={handleLogin}
+              loading={loading}
             />
+
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Register')}
+              style={styles.linkRow}
+            >
+              <Text style={styles.linkText}>
+                Inget konto?{' '}
+                <Text style={styles.linkAccent}>Registrera dig</Text>
+              </Text>
+            </TouchableOpacity>
           </View>
-
-          <PrimaryButton
-            label="Logga in"
-            onPress={handleLogin}
-            loading={loading}
-          />
-
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Register')}
-            style={styles.linkRow}
-          >
-            <Text style={styles.linkText}>
-              Inget konto?{' '}
-              <Text style={styles.linkAccent}>Registrera dig</Text>
-            </Text>
-          </TouchableOpacity>
         </View>
-      </ScrollView>
+      </ScreenContainer>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.paper },
-  container: {
-    flexGrow: 1,
-    justifyContent: 'center',
+  flex: { flex: 1 },
+  scrollContent: {
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing['2xl'],
+  },
+  container: {
+    flex: 1,
+    justifyContent: 'center',
     gap: spacing.xl,
   },
   header: {

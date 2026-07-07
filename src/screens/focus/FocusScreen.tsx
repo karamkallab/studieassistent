@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, Pressable, AppState, AppStateStatus, Alert, ScrollView,
+  View, Text, StyleSheet, Pressable, AppState, AppStateStatus, Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Circle } from 'react-native-svg';
@@ -8,6 +8,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { scheduleTimerNotif, cancelTimerNotif } from '../../lib/notifications';
 import { PressableScale } from '../../components/PressableScale';
+import { ScreenContainer } from '../../components/ScreenContainer';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 
 type Phase = 'work' | 'break';
@@ -189,7 +190,7 @@ export default function FocusScreen() {
   const ringColor = phase === 'work' ? (selectedCourse?.color ?? colors.highlight) : colors.sage;
 
   return (
-    <ScrollView style={st.container} contentContainerStyle={st.content}>
+    <ScreenContainer contentContainerStyle={st.content}>
       <Text style={st.heading}>Fokustimer</Text>
 
       {/* Settings summary / adjustment */}
@@ -333,12 +334,11 @@ export default function FocusScreen() {
             : `${weeklyMinutes}m`}
         </Text>
       </View>
-    </ScrollView>
+    </ScreenContainer>
   );
 }
 
 const st = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.paper },
   content: { alignItems: 'center', paddingTop: spacing.xl, paddingBottom: spacing['2xl'], gap: spacing.lg },
 
   heading: { fontFamily: fontFamily.serif, fontSize: fontSize['2xl'], color: colors.ink },

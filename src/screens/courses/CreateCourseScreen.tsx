@@ -5,7 +5,6 @@ import {
   TextInput,
   StyleSheet,
   Alert,
-  ScrollView,
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
@@ -19,6 +18,7 @@ import { AppStackParamList } from '../../navigation/AppNavigator';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { UploadAnimation, type UploadPhase } from '../../components/UploadAnimation';
 import { ColorSwatchPicker } from '../../components/ColorSwatchPicker';
+import { ScreenContainer } from '../../components/ScreenContainer';
 import { colors, fontFamily, fontSize, spacing, radius, nextCourseColor } from '../../theme/tokens';
 import { canUpload, incrementUploads, getUsage, FREE_UPLOADS_PER_MONTH } from '../../lib/limits';
 
@@ -159,7 +159,7 @@ export default function CreateCourseScreen({ navigation }: Props) {
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScreenContainer contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.field}>
           <Text style={styles.label}>Kursnamn *</Text>
           <TextInput
@@ -220,7 +220,7 @@ export default function CreateCourseScreen({ navigation }: Props) {
           <PrimaryButton label="Skapa kurs" onPress={handleCreate} />
           <PrimaryButton label="Avbryt" onPress={() => navigation.goBack()} variant="ghost" />
         </View>
-      </ScrollView>
+      </ScreenContainer>
     </KeyboardAvoidingView>
   );
 }
@@ -233,7 +233,6 @@ function decodeBase64(base64: string): Uint8Array {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.paper },
   content: { padding: spacing.xl, gap: spacing.lg, paddingBottom: spacing['2xl'] },
   loadingContainer: { flex: 1, backgroundColor: colors.paper, justifyContent: 'center', alignItems: 'center' },
   field: { gap: spacing.xs },

@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity,
+  View, Text, StyleSheet, TouchableOpacity,
   ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -16,6 +16,7 @@ import { mondayOf } from '../../lib/dates';
 import { PressableScale } from '../../components/PressableScale';
 import { StaggerIn } from '../../components/StaggerIn';
 import { AnimatedCheck } from '../../components/AnimatedCheck';
+import { ScreenContainer } from '../../components/ScreenContainer';
 import { useStreakPulse } from '../../hooks/useStreakPulse';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 
@@ -139,8 +140,7 @@ export default function HomeScreen() {
   }
 
   return (
-    <ScrollView
-      style={s.container}
+    <ScreenContainer
       contentContainerStyle={s.content}
       refreshControl={
         <RefreshControl
@@ -267,12 +267,11 @@ export default function HomeScreen() {
           </View>
         </View>
       )}
-    </ScrollView>
+    </ScreenContainer>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.paper },
   content: { padding: spacing.md, paddingBottom: spacing['2xl'], gap: spacing.lg },
   center: { flex: 1, backgroundColor: colors.paper, justifyContent: 'center', alignItems: 'center' },
 

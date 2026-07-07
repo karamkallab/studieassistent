@@ -5,7 +5,6 @@ import {
   TextInput,
   StyleSheet,
   Alert,
-  ScrollView,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -14,6 +13,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { AppStackParamList } from '../../navigation/AppNavigator';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { ScreenContainer } from '../../components/ScreenContainer';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'CreateFlashcard'>;
@@ -73,7 +73,7 @@ export default function CreateFlashcardScreen({ route, navigation }: Props) {
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScreenContainer contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.field}>
           <Text style={styles.label}>Fråga</Text>
           <TextInput
@@ -109,13 +109,13 @@ export default function CreateFlashcardScreen({ route, navigation }: Props) {
           />
           <PrimaryButton label="Avbryt" onPress={() => navigation.goBack()} variant="ghost" />
         </View>
-      </ScrollView>
+      </ScreenContainer>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.paper },
+  flex: { flex: 1 },
   content: { padding: spacing.xl, gap: spacing.md },
   field: { gap: spacing.xs },
   label: {

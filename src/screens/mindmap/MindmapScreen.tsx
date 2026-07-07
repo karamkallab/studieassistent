@@ -17,6 +17,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { AppStackParamList } from '../../navigation/AppNavigator';
 import { MindmapView } from '../../components/MindmapView';
+import { ScreenContainer } from '../../components/ScreenContainer';
 import { MindmapNode, sampleMindmap } from '../../data/sampleMindmap';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 
@@ -193,13 +194,54 @@ export default function MindmapScreen({ route, navigation }: Props) {
 
   return (
     <GestureHandlerRootView style={styles.root}>
-      <View style={styles.container}>
-        <Text style={styles.hint}>
-          {editMode
-            ? 'Tryck på en nod för att redigera, lägga till eller ta bort'
-            : 'Pan/zoom fritt · Tryck på nod med prick för att kollapsa'}
-        </Text>
-
+      <ScreenContainer
+        scroll={false}
+        header={
+          <Text style={styles.hint}>
+            {editMode
+              ? 'Tryck på en nod för att redigera, lägga till eller ta bort'
+              : 'Pan/zoom fritt · Tryck på nod med prick för att kollapsa'}
+          </Text>
+        }
+        overlay={
+          <Modal visible={modal !== null} transparent animationType="fade" onRequestClose={() => setModal(null)}>
+            <KeyboardAvoidingView
+              style={styles.modalOverlay}
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            >
+              <View style={styles.modalBox}>
+                <Text style={styles.modalTitle}>
+                  {modal?.mode === 'addChild' ? 'Ny undernod' : 'Redigera text'}
+                </Text>
+                <TextInput
+                  style={styles.modalInput}
+                  value={inputText}
+                  onChangeText={setInputText}
+                  placeholder="Skriv text här..."
+                  placeholderTextColor={colors.inkMuted}
+                  autoFocus
+                  onSubmitEditing={handleModalConfirm}
+                />
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={styles.modalCancelBtn}
+                    onPress={() => { setModal(null); setInputText(''); }}
+                  >
+                    <Text style={styles.modalCancelText}>Avbryt</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalOkBtn, !inputText.trim() && styles.modalOkBtnDisabled]}
+                    onPress={handleModalConfirm}
+                    disabled={!inputText.trim()}
+                  >
+                    <Text style={styles.modalOkText}>OK</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </KeyboardAvoidingView>
+          </Modal>
+        }
+      >
         {data && (
           <MindmapView
             data={data}
@@ -207,52 +249,13 @@ export default function MindmapScreen({ route, navigation }: Props) {
             onNodePress={handleNodePress}
           />
         )}
-      </View>
-
-      {/* Text-input modal */}
-      <Modal visible={modal !== null} transparent animationType="fade" onRequestClose={() => setModal(null)}>
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>
-              {modal?.mode === 'addChild' ? 'Ny undernod' : 'Redigera text'}
-            </Text>
-            <TextInput
-              style={styles.modalInput}
-              value={inputText}
-              onChangeText={setInputText}
-              placeholder="Skriv text här..."
-              placeholderTextColor={colors.inkMuted}
-              autoFocus
-              onSubmitEditing={handleModalConfirm}
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => { setModal(null); setInputText(''); }}
-              >
-                <Text style={styles.modalCancelText}>Avbryt</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalOkBtn, !inputText.trim() && styles.modalOkBtnDisabled]}
-                onPress={handleModalConfirm}
-                disabled={!inputText.trim()}
-              >
-                <Text style={styles.modalOkText}>OK</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      </ScreenContainer>
     </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  container: { flex: 1, backgroundColor: colors.paper },
   center: { flex: 1, backgroundColor: colors.paper, justifyContent: 'center', alignItems: 'center' },
   hint: {
     fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted,

@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppStackParamList } from '../../navigation/AppNavigator';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { ScreenContainer } from '../../components/ScreenContainer';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 import { FREE_UPLOADS_PER_MONTH } from '../../lib/limits';
 
@@ -18,7 +19,7 @@ const FEATURES = [
 
 export default function UpgradeScreen({ navigation }: Props) {
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
+    <ScreenContainer contentContainerStyle={styles.container}>
       <Text style={styles.title}>Studieassistenten Premium</Text>
       <Text style={styles.subtitle}>
         Lås upp AI-funktionerna och lär dig snabbare med automatiskt genererat
@@ -53,12 +54,11 @@ export default function UpgradeScreen({ navigation }: Props) {
           variant="ghost"
         />
       </View>
-    </ScrollView>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: colors.paper },
   container: { padding: spacing.xl, gap: spacing.xl, paddingBottom: spacing['2xl'] },
   title: { fontFamily: fontFamily.serif, fontSize: fontSize['2xl'], color: colors.ink },
   subtitle: {

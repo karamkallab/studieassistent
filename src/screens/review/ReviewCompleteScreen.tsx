@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppStackParamList } from '../../navigation/AppNavigator';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { ScreenContainer } from '../../components/ScreenContainer';
 import { colors, fontFamily, fontSize, spacing } from '../../theme/tokens';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'ReviewComplete'>;
@@ -11,7 +12,7 @@ export default function ReviewCompleteScreen({ route, navigation }: Props) {
   const { count, streakDays } = route.params;
 
   return (
-    <View style={styles.container}>
+    <ScreenContainer scroll={false} contentContainerStyle={styles.container}>
       <View style={styles.content}>
         <Text style={styles.headline}>Klart!</Text>
 
@@ -42,14 +43,12 @@ export default function ReviewCompleteScreen({ route, navigation }: Props) {
           onPress={() => navigation.navigate('Main')}
         />
       </View>
-    </View>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: colors.paper,
     justifyContent: 'space-between',
     padding: spacing.xl,
     paddingTop: spacing['2xl'] * 1.5,

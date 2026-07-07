@@ -2,12 +2,10 @@ import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
-  FlatList,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
-  ScrollView,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
@@ -16,6 +14,7 @@ import { useAuth } from '../../context/AuthContext';
 import { AppStackParamList } from '../../navigation/AppNavigator';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { useConfirmDialog } from '../../components/ConfirmDialog';
+import { ScreenContainer } from '../../components/ScreenContainer';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 import { getUsage, FREE_UPLOADS_PER_MONTH } from '../../lib/limits';
 
@@ -136,11 +135,8 @@ export default function CourseScreen({ route, navigation }: Props) {
   }
 
   return (
-    <>
-    <FlatList
-      style={styles.container}
-      data={cards}
-      keyExtractor={(c) => c.id}
+    <ScreenContainer
+      contentContainerStyle={styles.list}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -149,151 +145,149 @@ export default function CourseScreen({ route, navigation }: Props) {
           colors={[colors.ink]}
         />
       }
-      ListHeaderComponent={
-        <View style={styles.headerArea}>
-          {/* Kursrubrik */}
-          <Text style={styles.title}>{courseName}</Text>
+      overlay={confirmDialog}
+    >
+      <View style={styles.headerArea}>
+        {/* Kursrubrik */}
+        <Text style={styles.title}>{courseName}</Text>
 
-          {/* Studiematerial-sektion */}
-          {documents.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>DOKUMENT</Text>
-              {documents.map((doc) => (
-                <View key={doc.id} style={styles.docRow}>
-                  <Text style={styles.docName} numberOfLines={1}>{doc.name}</Text>
-                  {doc.generated_at ? (
-                    <TouchableOpacity
-                      onPress={() => navigation.navigate('Summary', { documentId: doc.id, courseId })}
-                    >
-                      <Text style={styles.docAction}>Sammanfattning</Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <TouchableOpacity
-                      disabled={generating === doc.id}
-                      onPress={() => handleGenerate(doc.id)}
-                    >
-                      <Text style={[styles.docAction, { color: colors.sage }]}>
-                        {generating === doc.id ? 'Genererar...' : 'Generera material'}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Studieverktyg */}
+        {/* Studiematerial-sektion */}
+        {documents.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>STUDIEVERKTYG</Text>
-            {cards.length > 0 && (
-              <TouchableOpacity
-                style={[styles.studyBtn, { backgroundColor: colors.ink }]}
-                onPress={() => navigation.navigate('StudyMode', { courseId, courseName })}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.studyBtnTxt}>
-                  Plugga{dueCount > 0 ? ` · ${dueCount} att repetera` : ''}
-                </Text>
-                <Text style={styles.studyBtnSub}>Välj flashcards, skriv, matcha eller quiz</Text>
-              </TouchableOpacity>
-            )}
-            <View style={styles.toolGrid}>
-              {quizCount > 0 && (
-                <TouchableOpacity
-                  style={styles.toolCard}
-                  onPress={() => navigation.navigate('Quiz', { courseId, courseName })}
-                >
-                  <Text style={styles.toolCount}>{quizCount}</Text>
-                  <Text style={styles.toolLabel}>quiz-frågor</Text>
-                </TouchableOpacity>
-              )}
+            <Text style={styles.sectionLabel}>DOKUMENT</Text>
+            {documents.map((doc) => (
+              <View key={doc.id} style={styles.docRow}>
+                <Text style={styles.docName} numberOfLines={1}>{doc.name}</Text>
+                {doc.generated_at ? (
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('Summary', { documentId: doc.id, courseId })}
+                  >
+                    <Text style={styles.docAction}>Sammanfattning</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    disabled={generating === doc.id}
+                    onPress={() => handleGenerate(doc.id)}
+                  >
+                    <Text style={[styles.docAction, { color: colors.sage }]}>
+                      {generating === doc.id ? 'Genererar...' : 'Generera material'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Studieverktyg */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>STUDIEVERKTYG</Text>
+          {cards.length > 0 && (
+            <TouchableOpacity
+              style={[styles.studyBtn, { backgroundColor: colors.ink }]}
+              onPress={() => navigation.navigate('StudyMode', { courseId, courseName })}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.studyBtnTxt}>
+                Plugga{dueCount > 0 ? ` · ${dueCount} att repetera` : ''}
+              </Text>
+              <Text style={styles.studyBtnSub}>Välj flashcards, skriv, matcha eller quiz</Text>
+            </TouchableOpacity>
+          )}
+          <View style={styles.toolGrid}>
+            {quizCount > 0 && (
               <TouchableOpacity
                 style={styles.toolCard}
-                onPress={() => navigation.navigate('Mindmap', { courseId, courseName })}
+                onPress={() => navigation.navigate('Quiz', { courseId, courseName })}
               >
-                <Text style={styles.toolIcon}>⬡</Text>
-                <Text style={styles.toolLabel}>tankekarta</Text>
+                <Text style={styles.toolCount}>{quizCount}</Text>
+                <Text style={styles.toolLabel}>quiz-frågor</Text>
               </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Kvot-indikator */}
-          {uploadsRemaining !== null && (
-            <Text style={styles.quota}>
-              {uploadsRemaining} av {FREE_UPLOADS_PER_MONTH} uppladdningar kvar denna månad
-            </Text>
-          )}
-
-          {/* Quiz-frågor */}
-          {quizQuestions.length > 0 && (
-            <View style={styles.section}>
-              <View style={styles.cardSectionHeader}>
-                <Text style={styles.sectionLabel}>QUIZ-FRÅGOR ({quizQuestions.length})</Text>
-                <TouchableOpacity onPress={() => navigation.navigate('Quiz', { courseId, courseName })}>
-                  <Text style={styles.addCardText}>Starta quiz</Text>
-                </TouchableOpacity>
-              </View>
-              {quizQuestions.map((q) => (
-                <View key={q.id} style={styles.card}>
-                  <View style={styles.cardContent}>
-                    <Text style={styles.question} numberOfLines={2}>{q.question}</Text>
-                    <Text style={styles.answer} numberOfLines={1}>Svar: {q.correct_answer}</Text>
-                  </View>
-                  <TouchableOpacity onPress={() => handleDeleteQuizQuestion(q.id)} style={styles.actionBtn}>
-                    <Text style={[styles.actionText, { color: colors.rust }]}>Ta bort</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* Flashkort-sektion header */}
-          <View style={styles.cardSectionHeader}>
-            <Text style={styles.sectionLabel}>
-              FLASHKORT {cards.length > 0 ? `(${cards.length})` : ''}
-            </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('CreateFlashcard', { courseId })}>
-              <Text style={styles.addCardText}>+ Nytt kort</Text>
+            )}
+            <TouchableOpacity
+              style={styles.toolCard}
+              onPress={() => navigation.navigate('Mindmap', { courseId, courseName })}
+            >
+              <Text style={styles.toolIcon}>⬡</Text>
+              <Text style={styles.toolLabel}>tankekarta</Text>
             </TouchableOpacity>
           </View>
         </View>
-      }
-      ListEmptyComponent={
+
+        {/* Kvot-indikator */}
+        {uploadsRemaining !== null && (
+          <Text style={styles.quota}>
+            {uploadsRemaining} av {FREE_UPLOADS_PER_MONTH} uppladdningar kvar denna månad
+          </Text>
+        )}
+
+        {/* Quiz-frågor */}
+        {quizQuestions.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.cardSectionHeader}>
+              <Text style={styles.sectionLabel}>QUIZ-FRÅGOR ({quizQuestions.length})</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Quiz', { courseId, courseName })}>
+                <Text style={styles.addCardText}>Starta quiz</Text>
+              </TouchableOpacity>
+            </View>
+            {quizQuestions.map((q) => (
+              <View key={q.id} style={styles.card}>
+                <View style={styles.cardContent}>
+                  <Text style={styles.question} numberOfLines={2}>{q.question}</Text>
+                  <Text style={styles.answer} numberOfLines={1}>Svar: {q.correct_answer}</Text>
+                </View>
+                <TouchableOpacity onPress={() => handleDeleteQuizQuestion(q.id)} style={styles.actionBtn}>
+                  <Text style={[styles.actionText, { color: colors.rust }]}>Ta bort</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {/* Flashkort-sektion header */}
+        <View style={styles.cardSectionHeader}>
+          <Text style={styles.sectionLabel}>
+            FLASHKORT {cards.length > 0 ? `(${cards.length})` : ''}
+          </Text>
+          <TouchableOpacity onPress={() => navigation.navigate('CreateFlashcard', { courseId })}>
+            <Text style={styles.addCardText}>+ Nytt kort</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {cards.length === 0 ? (
         <View style={styles.emptyCards}>
           <Text style={styles.emptyCardsText}>Inga flashkort ännu.</Text>
           <TouchableOpacity onPress={() => navigation.navigate('CreateFlashcard', { courseId })}>
             <Text style={styles.emptyCardsLink}>Skapa ditt första kort</Text>
           </TouchableOpacity>
         </View>
-      }
-      contentContainerStyle={styles.list}
-      renderItem={({ item }) => (
-        <View style={styles.card}>
-          <View style={styles.cardContent}>
-            <Text style={styles.question} numberOfLines={2}>{item.question}</Text>
-            <Text style={styles.answer} numberOfLines={1}>{item.answer}</Text>
+      ) : (
+        cards.map((item) => (
+          <View key={item.id} style={styles.card}>
+            <View style={styles.cardContent}>
+              <Text style={styles.question} numberOfLines={2}>{item.question}</Text>
+              <Text style={styles.answer} numberOfLines={1}>{item.answer}</Text>
+            </View>
+            <View style={styles.cardActions}>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('CreateFlashcard', { courseId, cardId: item.id })}
+                style={styles.actionBtn}
+              >
+                <Text style={styles.actionText}>Redigera</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleDeleteCard(item.id)} style={styles.actionBtn}>
+                <Text style={[styles.actionText, { color: colors.rust }]}>Ta bort</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-          <View style={styles.cardActions}>
-            <TouchableOpacity
-              onPress={() => navigation.navigate('CreateFlashcard', { courseId, cardId: item.id })}
-              style={styles.actionBtn}
-            >
-              <Text style={styles.actionText}>Redigera</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleDeleteCard(item.id)} style={styles.actionBtn}>
-              <Text style={[styles.actionText, { color: colors.rust }]}>Ta bort</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        ))
       )}
-    />
-    {confirmDialog}
-    </>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.paper },
   center: { flex: 1, backgroundColor: colors.paper, justifyContent: 'center', alignItems: 'center' },
   headerArea: { padding: spacing.md, gap: spacing.lg },
   title: { fontFamily: fontFamily.serif, fontSize: fontSize['2xl'], color: colors.ink },

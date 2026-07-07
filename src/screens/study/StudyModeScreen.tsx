@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { AppStackParamList } from '../../navigation/AppNavigator';
+import { ScreenContainer } from '../../components/ScreenContainer';
 import { colors, fontFamily, fontSize, spacing, radius, cardRotation } from '../../theme/tokens';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'StudyMode'>;
@@ -87,7 +88,7 @@ export default function StudyModeScreen({ route, navigation }: Props) {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScreenContainer contentContainerStyle={styles.content}>
       <Text style={styles.title}>{courseName}</Text>
       <Text style={styles.subtitle}>Välj pluggläge</Text>
 
@@ -113,12 +114,11 @@ export default function StudyModeScreen({ route, navigation }: Props) {
           ))}
         </View>
       )}
-    </ScrollView>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.paper },
   content: { padding: spacing.xl, gap: spacing.lg, paddingBottom: spacing['2xl'] },
   title: { fontFamily: fontFamily.serif, fontSize: fontSize['2xl'], color: colors.ink },
   subtitle: { fontFamily: fontFamily.body, fontSize: fontSize.base, color: colors.inkMuted },

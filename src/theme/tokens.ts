@@ -7,6 +7,7 @@ export const colors = {
   rust: '#C1666B',
   cardBorder: '#D8D3C8',
   cardBg: '#FFFFFF',
+  dot: '#D9D3C4',
 } as const;
 
 export const fontFamily = {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView,
+  View, Text, TextInput, StyleSheet, TouchableOpacity,
   ActivityIndicator, Alert, Switch,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -8,6 +8,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { AppStackParamList } from '../../navigation/AppNavigator';
 import { requestPermission, scheduleStudyPlan, cancelStudyPlan } from '../../lib/notifications';
+import { ScreenContainer } from '../../components/ScreenContainer';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 
 type Course = { id: string; name: string };
@@ -130,7 +131,7 @@ export default function CreatePlanScreen({ route, navigation }: Props) {
   }
 
   return (
-    <ScrollView style={s.container} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+    <ScreenContainer contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
       {/* Title */}
       <Text style={s.label}>TITEL</Text>
       <TextInput
@@ -247,12 +248,11 @@ export default function CreatePlanScreen({ route, navigation }: Props) {
       >
         <Text style={s.saveBtnTxt}>{loading ? 'Sparar...' : 'Spara pass'}</Text>
       </TouchableOpacity>
-    </ScrollView>
+    </ScreenContainer>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.paper },
   content: { padding: spacing.md, gap: spacing.sm, paddingBottom: spacing['2xl'] },
   center: { flex: 1, backgroundColor: colors.paper, justifyContent: 'center', alignItems: 'center' },
 

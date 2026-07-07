@@ -5,7 +5,6 @@ import {
   TextInput,
   StyleSheet,
   Alert,
-  ScrollView,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -14,6 +13,7 @@ import { supabase } from '../../lib/supabase';
 import { AppStackParamList } from '../../navigation/AppNavigator';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { ColorSwatchPicker } from '../../components/ColorSwatchPicker';
+import { ScreenContainer } from '../../components/ScreenContainer';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'EditCourse'>;
@@ -48,8 +48,7 @@ export default function EditCourseScreen({ route, navigation }: Props) {
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView
-        style={styles.container}
+      <ScreenContainer
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
@@ -86,13 +85,12 @@ export default function EditCourseScreen({ route, navigation }: Props) {
           <PrimaryButton label="Spara" onPress={handleSave} loading={loading} />
           <PrimaryButton label="Avbryt" onPress={() => navigation.goBack()} variant="ghost" />
         </View>
-      </ScrollView>
+      </ScreenContainer>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.paper },
   content: { padding: spacing.xl, gap: spacing.lg },
   field: { gap: spacing.xs },
   label: { fontFamily: fontFamily.bodySemiBold, fontSize: fontSize.sm, color: colors.ink },
