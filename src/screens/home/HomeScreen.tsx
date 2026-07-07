@@ -10,73 +10,63 @@ import { useAuth } from '../../context/AuthContext';
 import type { AppStackParamList } from '../../navigation/AppNavigator';
 import { HighlighterText } from '../../components/HighlighterText';
 import { getStreak } from '../../lib/streak';
+import { usePlanCompletions } from '../../hooks/usePlanCompletions';
+import { mondayOf } from '../../lib/dates';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 
-type StudyPlan = {
-  id: string;
-  title: string;
-  time_of_day: string;
-  duration_minutes: number;
-  course_id: string | null;
-  weekdays: number[];
-  specific_date: string | null;
-  recurring: boolean;
-  courses: { name: string } | null;
-};
 type DueCourse = { courseId: string; courseName: string; dueCount: number };
 
 const MONTH_NAMES = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
 const DAY_NAMES = ['Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör', 'Sön'];
 
-function todayStr() { return new Date().toISOString().split('T')[0]; }
-function dbDay() { return (new Date().getDay() + 6) % 7; } // 0=Mon..6=Sun
-
 export default function HomeScreen() {
   const { user } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
+  const { plans, loading: plansLoading, fetchRange, occurrencesOn, isDone, toggleDone } = usePlanCompletions(user?.id);
 
-  const [todayPlans, setTodayPlans] = useState<StudyPlan[]>([]);
-  const [completions, setCompletions] = useState<Set<string>>(new Set());
   const [dueCourses, setDueCourses] = useState<DueCourse[]>([]);
   const [streak, setStreak] = useState(0);
-  const [weeklyTotal, setWeeklyTotal] = useState(0);
-  const [weeklyDone, setWeeklyDone] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [focusWorkMins, setFocusWorkMins] = useState(25);
+  const [focusBreakMins, setFocusBreakMins] = useState(5);
+
+  const today = new Date();
+  const monday = mondayOf(today);
+  const weekDates = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return d;
+  });
 
   const fetchAll = useCallback(async () => {
-    const today = todayStr();
-    const day = dbDay();
+    const now = new Date();
+    const weekMonday = mondayOf(now);
+    const weekSunday = new Date(weekMonday);
+    weekSunday.setDate(weekMonday.getDate() + 6);
 
     const [
-      { data: allPlans },
-      { data: comps },
       { data: dueCards },
       { data: courses },
       streakDays,
+      { data: focusSettings },
     ] = await Promise.all([
-      supabase.from('study_plans')
-        .select('id, title, time_of_day, duration_minutes, course_id, weekdays, specific_date, recurring, courses(name)')
-        .eq('user_id', user!.id),
-      supabase.from('study_plan_completions')
-        .select('plan_id').eq('completed_on', today),
       supabase.from('flashcards')
         .select('id, course_id')
         .eq('user_id', user!.id)
         .lte('next_review_at', new Date().toISOString()),
       supabase.from('courses').select('id, name'),
       getStreak(user!.id),
+      supabase.from('user_settings')
+        .select('focus_work_minutes, focus_break_minutes')
+        .eq('user_id', user!.id).maybeSingle(),
+      fetchRange(weekMonday, weekSunday),
     ]);
 
-    // Filter plans for today
-    const plans = (allPlans ?? []).filter(p => {
-      if (p.specific_date === today) return true;
-      if (p.recurring && Array.isArray(p.weekdays) && p.weekdays.includes(day)) return true;
-      return false;
-    }) as unknown as StudyPlan[];
-    plans.sort((a, b) => a.time_of_day.localeCompare(b.time_of_day));
-    setTodayPlans(plans);
-    setCompletions(new Set((comps ?? []).map(c => c.plan_id)));
+    if (focusSettings) {
+      setFocusWorkMins(focusSettings.focus_work_minutes);
+      setFocusBreakMins(focusSettings.focus_break_minutes);
+    }
 
     // Group due cards by course
     const courseMap = new Map<string, { name: string; count: number }>();
@@ -93,69 +83,37 @@ export default function HomeScreen() {
         .sort((a, b) => b.dueCount - a.dueCount),
     );
 
-    // Weekly progress
-    const monday = new Date();
-    monday.setDate(monday.getDate() - day);
-    monday.setHours(0, 0, 0, 0);
-    const sunday = new Date(monday.getTime() + 7 * 86400000 - 1);
-
-    let total = 0;
-    for (let d = 0; d < 7; d++) {
-      const dayDate = new Date(monday.getTime() + d * 86400000);
-      const dayStr = dayDate.toISOString().split('T')[0];
-      for (const plan of allPlans ?? []) {
-        if (plan.specific_date === dayStr) { total++; continue; }
-        if (plan.recurring && Array.isArray(plan.weekdays) && plan.weekdays.includes(d)) total++;
-      }
-    }
-    const mondayStr = monday.toISOString().split('T')[0];
-    const sundayStr = sunday.toISOString().split('T')[0];
-    const { data: weekComps } = await supabase
-      .from('study_plan_completions')
-      .select('plan_id')
-      .gte('completed_on', mondayStr)
-      .lte('completed_on', sundayStr);
-
-    setWeeklyTotal(total);
-    setWeeklyDone((weekComps ?? []).length);
     setStreak(streakDays);
     setLoading(false);
     setRefreshing(false);
-  }, [user]);
+  }, [user, fetchRange]);
 
   useFocusEffect(useCallback(() => { fetchAll(); }, [fetchAll]));
 
-  const handleToggleDone = async (planId: string) => {
-    const today = todayStr();
-    const isDone = completions.has(planId);
-    if (isDone) {
-      await supabase.from('study_plan_completions')
-        .delete().eq('plan_id', planId).eq('completed_on', today);
-      setCompletions(prev => { const s = new Set(prev); s.delete(planId); return s; });
-      setWeeklyDone(w => Math.max(0, w - 1));
-    } else {
-      await supabase.from('study_plan_completions')
-        .insert({ plan_id: planId, completed_on: today });
-      setCompletions(prev => new Set([...prev, planId]));
-      setWeeklyDone(w => w + 1);
-    }
-  };
+  const todayPlans = occurrencesOn(today)
+    .slice()
+    .sort((a, b) => a.time_of_day.localeCompare(b.time_of_day));
+
+  const weeklyTotal = weekDates.reduce((sum, d) => sum + occurrencesOn(d).length, 0);
+  const weeklyDone = weekDates.reduce(
+    (sum, d) => sum + occurrencesOn(d).filter(p => isDone(p.id, d)).length,
+    0,
+  );
 
   const navigateToFocus = () => {
-    // Navigate to the Fokus tab via parent tab navigator
-    (navigation as any).getParent?.()?.navigate('Fokus');
+    (navigation as any).navigate('Fokus');
   };
 
   const navigateToPlan = () => {
-    (navigation as any).getParent?.()?.navigate('Planera');
+    (navigation as any).navigate('Planera');
   };
 
   const dateLabel = () => {
     const d = new Date();
-    return `${DAY_NAMES[dbDay()]} ${d.getDate()} ${MONTH_NAMES[d.getMonth()]}`;
+    return `${DAY_NAMES[(d.getDay() + 6) % 7]} ${d.getDate()} ${MONTH_NAMES[d.getMonth()]}`;
   };
 
-  if (loading) {
+  if (loading || plansLoading) {
     return <View style={s.center}><ActivityIndicator color={colors.ink} /></View>;
   }
 
@@ -207,7 +165,7 @@ export default function HomeScreen() {
       {/* Quick focus */}
       <TouchableOpacity style={s.focusBtn} onPress={navigateToFocus} activeOpacity={0.85}>
         <Text style={s.focusBtnTxt}>◎  Starta fokustimer</Text>
-        <Text style={s.focusBtnSub}>25 min fokus · 5 min paus</Text>
+        <Text style={s.focusBtnSub}>{focusWorkMins} min fokus · {focusBreakMins} min paus</Text>
       </TouchableOpacity>
 
       {/* Today's plans */}
@@ -222,13 +180,11 @@ export default function HomeScreen() {
           <Text style={s.emptyTxt}>Inga pass inplanerade idag.</Text>
         ) : (
           todayPlans.map(plan => {
-            const done = completions.has(plan.id);
-            const courseName = plan.courses
-              ? (plan.courses as any).name ?? (plan.courses as { name: string }).name
-              : null;
+            const done = isDone(plan.id, today);
+            const courseName = plan.courses ? plan.courses.name : null;
             return (
               <View key={plan.id} style={[s.planCard, done && s.planCardDone]}>
-                <TouchableOpacity onPress={() => handleToggleDone(plan.id)} style={s.doneBtn}>
+                <TouchableOpacity onPress={() => toggleDone(plan.id, today)} style={s.doneBtn}>
                   <View style={[s.doneCircle, done && s.doneCircleFilled]}>
                     {done && <Text style={s.doneCheck}>✓</Text>}
                   </View>

@@ -1,7 +1,7 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  ActivityIndicator, RefreshControl, Alert,
+  ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -9,113 +9,131 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import type { AppStackParamList } from '../../navigation/AppNavigator';
 import { HighlighterText } from '../../components/HighlighterText';
+import { useConfirmDialog } from '../../components/ConfirmDialog';
+import { MonthCalendarModal } from '../../components/MonthCalendarModal';
 import { cancelStudyPlan } from '../../lib/notifications';
+import { usePlanCompletions, occurrenceOn, type StudyPlan } from '../../hooks/usePlanCompletions';
+import { localDateStr, dbDayIndex, mondayOf } from '../../lib/dates';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 
-type StudyPlan = {
-  id: string;
-  title: string;
-  time_of_day: string;
-  duration_minutes: number;
-  course_id: string | null;
-  weekdays: number[];
-  specific_date: string | null;
-  recurring: boolean;
-  courses: { name: string } | null;
-};
+const UNDO_WINDOW_MS = 4000;
 
 const DAY_NAMES = ['Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör', 'Sön'];
 const MONTH_NAMES = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
-
-function getWeekDates(offset: number): Date[] {
-  const today = new Date();
-  const day = (today.getDay() + 6) % 7;
-  const monday = new Date(today.getTime() - day * 86400000 + offset * 7 * 86400000);
-  monday.setHours(0, 0, 0, 0);
-  return Array.from({ length: 7 }, (_, i) => new Date(monday.getTime() + i * 86400000));
-}
 
 function fmtDate(d: Date): string {
   return `${d.getDate()} ${MONTH_NAMES[d.getMonth()]}`;
 }
 
-function dbDayIndex(d: Date): number {
-  return (d.getDay() + 6) % 7;
-}
-
 export default function PlanScreen() {
   const { user } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
+  const { plans, setPlans, loading, fetchRange, occurrencesOn, isDone, toggleDone } = usePlanCompletions(user?.id);
 
-  const [plans, setPlans] = useState<StudyPlan[]>([]);
-  const [completions, setCompletions] = useState<Set<string>>(new Set());
-  const [weekOffset, setWeekOffset] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [anchorDate, setAnchorDate] = useState(() => new Date());
   const [refreshing, setRefreshing] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<{
+    plan: StudyPlan;
+    timer: ReturnType<typeof setTimeout>;
+  } | null>(null);
+  const pendingDeleteRef = useRef(pendingDelete);
+  pendingDeleteRef.current = pendingDelete;
+  const { confirm, element: confirmDialog } = useConfirmDialog();
 
-  const weekDates = getWeekDates(weekOffset);
-  const todayStr = new Date().toISOString().split('T')[0];
+  const monday = mondayOf(anchorDate);
+  const weekDates = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return d;
+  });
+  const todayStr = localDateStr(new Date());
 
   const fetchAll = useCallback(async () => {
-    const monday = weekDates[0];
-    const sunday = weekDates[6];
-    const mondayStr = monday.toISOString().split('T')[0];
-    const sundayStr = sunday.toISOString().split('T')[0];
-
-    const [{ data: planData }, { data: compData }] = await Promise.all([
-      supabase.from('study_plans')
-        .select('id, title, time_of_day, duration_minutes, course_id, weekdays, specific_date, recurring, courses(name)')
-        .eq('user_id', user!.id)
-        .order('time_of_day'),
-      supabase.from('study_plan_completions')
-        .select('plan_id, completed_on')
-        .gte('completed_on', mondayStr)
-        .lte('completed_on', sundayStr),
-    ]);
-
-    setPlans((planData ?? []) as unknown as StudyPlan[]);
-    setCompletions(new Set((compData ?? []).map(c => c.plan_id)));
-    setLoading(false);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    await fetchRange(monday, sunday);
     setRefreshing(false);
-  }, [user, weekOffset]);
+  }, [fetchRange, monday.getTime()]);
 
   useFocusEffect(useCallback(() => { fetchAll(); }, [fetchAll]));
 
-  const plansForDay = (date: Date): StudyPlan[] => {
-    const dateStr = date.toISOString().split('T')[0];
-    const dayIdx = dbDayIndex(date);
-    return plans.filter(p => {
-      if (p.specific_date === dateStr) return true;
-      if (p.recurring && p.weekdays.includes(dayIdx)) return true;
-      return false;
-    });
-  };
+  const excludeOccurrence = async (plan: StudyPlan, dateStr: string) => {
+    const prevExcluded = plan.excluded_dates ?? [];
+    const nextExcluded = [...prevExcluded, dateStr];
+    setPlans(prev => prev.map(p => (p.id === plan.id ? { ...p, excluded_dates: nextExcluded } : p)));
 
-  const handleToggleDone = async (planId: string, dateStr: string) => {
-    const isDone = completions.has(planId);
-    if (isDone) {
-      await supabase.from('study_plan_completions')
-        .delete().eq('plan_id', planId).eq('completed_on', dateStr);
-      setCompletions(prev => { const s = new Set(prev); s.delete(planId); return s; });
-    } else {
-      await supabase.from('study_plan_completions')
-        .insert({ plan_id: planId, completed_on: dateStr });
-      setCompletions(prev => new Set([...prev, planId]));
+    const { data, error } = await supabase.from('study_plans')
+      .update({ excluded_dates: nextExcluded })
+      .eq('id', plan.id)
+      .select('id');
+
+    if (error || !data?.length) {
+      console.error('Kunde inte ta bort tillfället:', error);
+      setPlans(prev => prev.map(p => (p.id === plan.id ? { ...p, excluded_dates: prevExcluded } : p)));
+      confirm('Fel', 'Kunde inte ta bort tillfället. Kontrollera din anslutning eller behörigheter.', [{ text: 'OK' }]);
     }
   };
 
-  const handleDelete = (plan: StudyPlan) => {
-    Alert.alert('Ta bort pass?', plan.title, [
-      { text: 'Avbryt', style: 'cancel' },
-      {
-        text: 'Ta bort', style: 'destructive',
-        onPress: async () => {
-          await supabase.from('study_plans').delete().eq('id', plan.id);
-          await cancelStudyPlan(plan.id);
-          setPlans(prev => prev.filter(p => p.id !== plan.id));
-        },
-      },
-    ]);
+  const commitDelete = async (plan: StudyPlan) => {
+    const { data, error } = await supabase.from('study_plans').delete().eq('id', plan.id).select('id');
+    if (error || !data?.length) {
+      console.error('Kunde inte ta bort studiepasset:', error);
+      setPlans(prev => (prev.some(p => p.id === plan.id) ? prev : [...prev, plan]));
+      confirm('Fel', 'Kunde inte ta bort passet. Kontrollera din anslutning eller behörigheter.', [{ text: 'OK' }]);
+      return;
+    }
+    await cancelStudyPlan(plan.id);
+  };
+
+  const deleteSeries = (plan: StudyPlan) => {
+    setPlans(prev => prev.filter(p => p.id !== plan.id));
+    commitDelete(plan);
+  };
+
+  const undoDelete = () => {
+    if (!pendingDelete) return;
+    clearTimeout(pendingDelete.timer);
+    const { plan } = pendingDelete;
+    setPlans(prev => [...prev, plan]);
+    setPendingDelete(null);
+  };
+
+  const deleteWithUndo = (plan: StudyPlan) => {
+    if (pendingDelete) {
+      clearTimeout(pendingDelete.timer);
+      commitDelete(pendingDelete.plan);
+    }
+    setPlans(prev => prev.filter(p => p.id !== plan.id));
+    const timer = setTimeout(() => {
+      setPendingDelete(current => {
+        if (current && current.plan.id === plan.id) commitDelete(current.plan);
+        return null;
+      });
+    }, UNDO_WINDOW_MS);
+    setPendingDelete({ plan, timer });
+  };
+
+  useEffect(() => () => {
+    if (pendingDeleteRef.current) {
+      clearTimeout(pendingDeleteRef.current.timer);
+      commitDelete(pendingDeleteRef.current.plan);
+    }
+  }, []);
+
+  const handleDelete = (plan: StudyPlan, dateStr: string) => {
+    if (plan.recurring) {
+      confirm(plan.title, 'Detta pass upprepas varje vecka.', [
+        { text: 'Avbryt', style: 'cancel' },
+        { text: 'Ta bort endast detta tillfälle', onPress: () => excludeOccurrence(plan, dateStr) },
+        { text: 'Ta bort hela serien', style: 'destructive', onPress: () => deleteSeries(plan) },
+      ]);
+    } else {
+      confirm('Ta bort passet?', plan.title, [
+        { text: 'Avbryt', style: 'cancel' },
+        { text: 'Ta bort', style: 'destructive', onPress: () => deleteWithUndo(plan) },
+      ]);
+    }
   };
 
   const weekLabel = () => {
@@ -127,8 +145,17 @@ export default function PlanScreen() {
     return `${mon.getDate()} ${MONTH_NAMES[mon.getMonth()]} – ${sun.getDate()} ${MONTH_NAMES[sun.getMonth()]}`;
   };
 
-  const totalForWeek = weekDates.reduce((sum, d) => sum + plansForDay(d).length, 0);
-  const doneForWeek = completions.size;
+  const totalForWeek = weekDates.reduce((sum, d) => sum + occurrencesOn(d).length, 0);
+  const doneForWeek = weekDates.reduce(
+    (sum, d) => sum + occurrencesOn(d).filter(p => isDone(p.id, d)).length,
+    0,
+  );
+
+  const hasPlansOn = useCallback((dateStr: string) => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    return plans.some(p => occurrenceOn(p, date));
+  }, [plans]);
 
   if (loading) {
     return <View style={s.center}><ActivityIndicator color={colors.ink} /></View>;
@@ -140,11 +167,19 @@ export default function PlanScreen() {
       <View style={s.header}>
         <HighlighterText textStyle={s.heading}>Planera</HighlighterText>
         <View style={s.weekNav}>
-          <TouchableOpacity onPress={() => setWeekOffset(w => w - 1)} style={s.weekBtn}>
+          <TouchableOpacity
+            onPress={() => setAnchorDate(d => { const n = new Date(d); n.setDate(n.getDate() - 7); return n; })}
+            style={s.weekBtn}
+          >
             <Text style={s.weekBtnTxt}>‹</Text>
           </TouchableOpacity>
-          <Text style={s.weekLabel}>{weekLabel()}</Text>
-          <TouchableOpacity onPress={() => setWeekOffset(w => w + 1)} style={s.weekBtn}>
+          <TouchableOpacity onPress={() => setCalendarOpen(true)} style={s.weekLabelBtn}>
+            <Text style={s.weekLabel}>{weekLabel()}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setAnchorDate(d => { const n = new Date(d); n.setDate(n.getDate() + 7); return n; })}
+            style={s.weekBtn}
+          >
             <Text style={s.weekBtnTxt}>›</Text>
           </TouchableOpacity>
         </View>
@@ -166,8 +201,8 @@ export default function PlanScreen() {
         }
       >
         {weekDates.map(date => {
-          const dayPlans = plansForDay(date);
-          const dateStr = date.toISOString().split('T')[0];
+          const dayPlans = occurrencesOn(date);
+          const dateStr = localDateStr(date);
           const isToday = dateStr === todayStr;
           return (
             <View key={dateStr} style={s.daySection}>
@@ -182,14 +217,12 @@ export default function PlanScreen() {
                 <Text style={s.emptyDay}>–</Text>
               ) : (
                 dayPlans.map(plan => {
-                  const done = completions.has(plan.id);
-                  const courseName = plan.courses
-                    ? (plan.courses as { name: string }).name
-                    : null;
+                  const done = isDone(plan.id, date);
+                  const courseName = plan.courses ? plan.courses.name : null;
                   return (
                     <View key={plan.id} style={[s.planCard, done && s.planCardDone]}>
                       <TouchableOpacity
-                        onPress={() => handleToggleDone(plan.id, dateStr)}
+                        onPress={() => toggleDone(plan.id, date)}
                         style={s.doneBtn}
                       >
                         <View style={[s.doneCircle, done && s.doneCircleFilled]}>
@@ -210,7 +243,7 @@ export default function PlanScreen() {
                       >
                         <Text style={s.editTxt}>Redigera</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleDelete(plan)} style={s.editBtn}>
+                      <TouchableOpacity onPress={() => handleDelete(plan, dateStr)} style={s.editBtn}>
                         <Text style={[s.editTxt, { color: colors.rust }]}>✕</Text>
                       </TouchableOpacity>
                     </View>
@@ -230,6 +263,26 @@ export default function PlanScreen() {
       >
         <Text style={s.fabTxt}>+</Text>
       </TouchableOpacity>
+
+      {/* Undo toast */}
+      {pendingDelete && (
+        <View style={s.toast}>
+          <Text style={s.toastTxt} numberOfLines={1}>Passet togs bort</Text>
+          <TouchableOpacity onPress={undoDelete}>
+            <Text style={s.toastUndo}>ÅNGRA</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {confirmDialog}
+
+      <MonthCalendarModal
+        visible={calendarOpen}
+        onClose={() => setCalendarOpen(false)}
+        initialMonth={anchorDate}
+        onSelectDate={setAnchorDate}
+        hasPlansOn={hasPlansOn}
+      />
     </View>
   );
 }
@@ -251,7 +304,8 @@ const s = StyleSheet.create({
   weekNav: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   weekBtn: { padding: spacing.xs, minWidth: 32, alignItems: 'center' },
   weekBtnTxt: { fontFamily: fontFamily.body, fontSize: fontSize.xl, color: colors.inkMuted },
-  weekLabel: { flex: 1, fontFamily: fontFamily.mono, fontSize: fontSize.sm, color: colors.ink },
+  weekLabelBtn: { flex: 1, paddingVertical: spacing.xs },
+  weekLabel: { fontFamily: fontFamily.mono, fontSize: fontSize.sm, color: colors.ink, textDecorationLine: 'underline' },
   weekProgress: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted },
 
   scroll: { paddingBottom: 100 },
@@ -297,4 +351,13 @@ const s = StyleSheet.create({
     borderRadius: 26, alignItems: 'center', justifyContent: 'center',
   },
   fabTxt: { color: colors.paper, fontSize: 28, lineHeight: 32, fontFamily: fontFamily.body },
+
+  toast: {
+    position: 'absolute', left: spacing.md, right: spacing.md, bottom: spacing.xl + 52 + spacing.sm,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: colors.ink, borderRadius: radius.button,
+    paddingVertical: spacing.sm, paddingHorizontal: spacing.md, gap: spacing.md,
+  },
+  toastTxt: { flex: 1, fontFamily: fontFamily.body, fontSize: fontSize.sm, color: colors.paper },
+  toastUndo: { fontFamily: fontFamily.bodySemiBold, fontSize: fontSize.sm, color: colors.highlight },
 });

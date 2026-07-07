@@ -17,8 +17,6 @@ type Settings = {
   daily_review_minute: number;
   study_plan_notifs: boolean;
   focus_notifs: boolean;
-  focus_work_minutes: number;
-  focus_break_minutes: number;
 };
 
 const DEFAULT_SETTINGS: Settings = {
@@ -27,8 +25,6 @@ const DEFAULT_SETTINGS: Settings = {
   daily_review_minute: 0,
   study_plan_notifs: true,
   focus_notifs: true,
-  focus_work_minutes: 25,
-  focus_break_minutes: 5,
 };
 
 export default function ProfileScreen() {
@@ -162,26 +158,6 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Fokustimer settings */}
-      <Text style={s.sectionLbl}>FOKUSTIMER</Text>
-      <View style={s.settingsCard}>
-        <NumRow
-          label="Fokusperiod (min)"
-          value={settings.focus_work_minutes}
-          onMinus={() => adjustNum('focus_work_minutes', -5, 5, 90)}
-          onPlus={() => adjustNum('focus_work_minutes', 5, 5, 90)}
-          saving={saving}
-        />
-        <View style={s.divider} />
-        <NumRow
-          label="Pauslängd (min)"
-          value={settings.focus_break_minutes}
-          onMinus={() => adjustNum('focus_break_minutes', -1, 1, 30)}
-          onPlus={() => adjustNum('focus_break_minutes', 1, 1, 30)}
-          saving={saving}
-        />
-      </View>
-
       {/* Notifications */}
       <Text style={s.sectionLbl}>NOTISER</Text>
       <View style={s.settingsCard}>
@@ -266,28 +242,6 @@ export default function ProfileScreen() {
         <Text style={s.signOutTxt}>Logga ut</Text>
       </TouchableOpacity>
     </ScrollView>
-  );
-}
-
-function NumRow({
-  label, value, onMinus, onPlus, saving,
-}: {
-  label: string; value: number;
-  onMinus: () => void; onPlus: () => void; saving: boolean;
-}) {
-  return (
-    <View style={s.settingRow}>
-      <Text style={s.settingLabel}>{label}</Text>
-      <View style={s.timeRow}>
-        <TouchableOpacity onPress={onMinus} style={s.adjBtn} disabled={saving}>
-          <Text style={s.adjTxt}>−</Text>
-        </TouchableOpacity>
-        <Text style={s.timeVal}>{value}</Text>
-        <TouchableOpacity onPress={onPlus} style={s.adjBtn} disabled={saving}>
-          <Text style={s.adjTxt}>+</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
   );
 }
 

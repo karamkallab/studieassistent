@@ -31,6 +31,8 @@ export default function FocusScreen() {
   const [weeklyMinutes, setWeeklyMinutes] = useState(0);
   const [courses, setCourses] = useState<Course[]>([]);
   const [courseId, setCourseId] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sessionStartRef = useRef<number | null>(null);
@@ -153,6 +155,30 @@ export default function FocusScreen() {
     setRemaining(workMins * 60);
   };
 
+  const saveFocusSettings = async (work: number, brk: number) => {
+    setSavingSettings(true);
+    try {
+      await supabase.from('user_settings')
+        .upsert({ user_id: user!.id, focus_work_minutes: work, focus_break_minutes: brk });
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const adjustWorkMins = (delta: number) => {
+    const val = Math.min(90, Math.max(5, workMins + delta));
+    setWorkMins(val);
+    if (timerState === 'idle' && phase === 'work') setRemaining(val * 60);
+    saveFocusSettings(val, breakMins);
+  };
+
+  const adjustBreakMins = (delta: number) => {
+    const val = Math.min(30, Math.max(1, breakMins + delta));
+    setBreakMins(val);
+    if (timerState === 'idle' && phase === 'break') setRemaining(val * 60);
+    saveFocusSettings(workMins, val);
+  };
+
   const totalSec = phase === 'work' ? workMins * 60 : breakMins * 60;
   const progress = remaining / totalSec;
   const dashOffset = CIRCUMFERENCE * (1 - progress);
@@ -162,6 +188,42 @@ export default function FocusScreen() {
   return (
     <ScrollView style={st.container} contentContainerStyle={st.content}>
       <Text style={st.heading}>Fokustimer</Text>
+
+      {/* Settings summary / adjustment */}
+      <Pressable onPress={() => setSettingsOpen(o => !o)} disabled={timerState !== 'idle'}>
+        <Text style={st.settingsSummary}>
+          {workMins} min fokus · {breakMins} min paus  {timerState === 'idle' ? '✎' : ''}
+        </Text>
+      </Pressable>
+      {settingsOpen && timerState === 'idle' && (
+        <View style={st.settingsCard}>
+          <View style={st.settingRow}>
+            <Text style={st.settingLabel}>Fokusperiod (min)</Text>
+            <View style={st.timeRow}>
+              <Pressable onPress={() => adjustWorkMins(-5)} style={st.adjBtn} disabled={savingSettings}>
+                <Text style={st.adjTxt}>−</Text>
+              </Pressable>
+              <Text style={st.timeVal}>{workMins}</Text>
+              <Pressable onPress={() => adjustWorkMins(5)} style={st.adjBtn} disabled={savingSettings}>
+                <Text style={st.adjTxt}>+</Text>
+              </Pressable>
+            </View>
+          </View>
+          <View style={st.divider} />
+          <View style={st.settingRow}>
+            <Text style={st.settingLabel}>Pauslängd (min)</Text>
+            <View style={st.timeRow}>
+              <Pressable onPress={() => adjustBreakMins(-1)} style={st.adjBtn} disabled={savingSettings}>
+                <Text style={st.adjTxt}>−</Text>
+              </Pressable>
+              <Text style={st.timeVal}>{breakMins}</Text>
+              <Pressable onPress={() => adjustBreakMins(1)} style={st.adjBtn} disabled={savingSettings}>
+                <Text style={st.adjTxt}>+</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
 
       {/* Phase toggle */}
       <View style={st.phaseRow}>
@@ -271,6 +333,26 @@ const st = StyleSheet.create({
   content: { alignItems: 'center', paddingTop: spacing.xl, paddingBottom: spacing['2xl'], gap: spacing.lg },
 
   heading: { fontFamily: fontFamily.serif, fontSize: fontSize['2xl'], color: colors.ink },
+
+  settingsSummary: { fontFamily: fontFamily.mono, fontSize: fontSize.sm, color: colors.inkMuted },
+  settingsCard: {
+    width: '100%', backgroundColor: colors.cardBg, borderWidth: 1,
+    borderColor: colors.cardBorder, borderRadius: radius.card, overflow: 'hidden',
+  },
+  settingRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    padding: spacing.md, gap: spacing.sm,
+  },
+  settingLabel: { fontFamily: fontFamily.bodySemiBold, fontSize: fontSize.base, color: colors.ink },
+  divider: { height: 1, backgroundColor: colors.cardBorder, marginHorizontal: spacing.md },
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  timeVal: { fontFamily: fontFamily.mono, fontSize: fontSize.base, color: colors.ink, minWidth: 40, textAlign: 'center' },
+  adjBtn: {
+    width: 32, height: 32, borderRadius: 16,
+    borderWidth: 1, borderColor: colors.cardBorder,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  adjTxt: { fontFamily: fontFamily.bodySemiBold, fontSize: fontSize.base, color: colors.ink },
 
   phaseRow: { flexDirection: 'row', gap: spacing.sm },
   phaseBtn: {
