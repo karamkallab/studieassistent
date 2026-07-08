@@ -11,13 +11,10 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import type { AppStackParamList } from '../../navigation/AppNavigator';
-import Animated from 'react-native-reanimated';
 import { CourseCard } from '../../components/CourseCard';
 import { useConfirmDialog } from '../../components/ConfirmDialog';
 import { PressableScale } from '../../components/PressableScale';
 import { ScreenContainer } from '../../components/ScreenContainer';
-import { getStreak } from '../../lib/streak';
-import { useStreakPulse } from '../../hooks/useStreakPulse';
 import { colors, fontFamily, fontSize, spacing } from '../../theme/tokens';
 
 type Course = { id: string; name: string; description: string | null; created_at: string; color: string };
@@ -28,17 +25,18 @@ export default function CourseListScreen() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [streak, setStreak] = useState(0);
   const [progressByCourse, setProgressByCourse] = useState<Record<string, number>>({});
+  const [cardCountByCourse, setCardCountByCourse] = useState<Record<string, number>>({});
+  const [dueCountByCourse, setDueCountByCourse] = useState<Record<string, number>>({});
+  const [docCountByCourse, setDocCountByCourse] = useState<Record<string, number>>({});
   const { confirm, element: confirmDialog } = useConfirmDialog();
-  const streakPulseStyle = useStreakPulse(streak);
 
   const fetchAll = useCallback(async () => {
     try {
-      const [{ data, error }, { data: cardData }, streakDays] = await Promise.all([
+      const [{ data, error }, { data: cardData }, { data: docData }] = await Promise.all([
         supabase.from('courses').select('*').order('created_at', { ascending: false }),
         supabase.from('flashcards').select('course_id, next_review_at').eq('user_id', user!.id),
-        getStreak(user!.id),
+        supabase.from('documents').select('course_id').eq('user_id', user!.id),
       ]);
       if (error) confirm('Fel', 'Kunde inte hämta kurser. Kontrollera din internetanslutning.', [{ text: 'OK' }]);
       else setCourses(data ?? []);
@@ -52,12 +50,22 @@ export default function CourseListScreen() {
         totals.set(card.course_id, entry);
       }
       const progress: Record<string, number> = {};
+      const cardCounts: Record<string, number> = {};
+      const dueCounts: Record<string, number> = {};
       for (const [courseId, { total, notOverdue }] of totals) {
         progress[courseId] = notOverdue / total;
+        cardCounts[courseId] = total;
+        dueCounts[courseId] = total - notOverdue;
       }
       setProgressByCourse(progress);
+      setCardCountByCourse(cardCounts);
+      setDueCountByCourse(dueCounts);
 
-      setStreak(streakDays);
+      const docCounts: Record<string, number> = {};
+      for (const doc of docData ?? []) {
+        docCounts[doc.course_id] = (docCounts[doc.course_id] ?? 0) + 1;
+      }
+      setDocCountByCourse(docCounts);
     } catch {
       confirm('Fel', 'Något gick fel. Försök igen.', [{ text: 'OK' }]);
     } finally {
@@ -107,22 +115,20 @@ export default function CourseListScreen() {
       header={
         <View style={styles.header}>
           <View style={styles.headerTop}>
-            <Text style={styles.heading}>Mina kurser</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.caption}>
+                {courses.length} {courses.length === 1 ? 'AKTIV KURS' : 'AKTIVA KURSER'}
+              </Text>
+              <Text style={styles.heading}>Kurser</Text>
+            </View>
+            <PressableScale
+              style={styles.addBtn}
+              onPress={() => navigation.navigate('CreateCourse')}
+            >
+              <Text style={styles.addBtnText}>+</Text>
+            </PressableScale>
           </View>
-          {streak > 0 && (
-            <Animated.View style={[styles.streakBadge, streakPulseStyle]}>
-              <Text style={styles.streakText}>{streak} {streak === 1 ? 'dag' : 'dagar'} i rad</Text>
-            </Animated.View>
-          )}
         </View>
-      }
-      overlay={
-        <PressableScale
-          style={styles.fab}
-          onPress={() => navigation.navigate('CreateCourse')}
-        >
-          <Text style={styles.fabText}>+</Text>
-        </PressableScale>
       }
     >
       {courses.length === 0 && !loading ? (
@@ -145,6 +151,9 @@ export default function CourseListScreen() {
             course={item}
             index={index}
             progress={progressByCourse[item.id] ?? null}
+            docCount={docCountByCourse[item.id] ?? 0}
+            cardCount={cardCountByCourse[item.id] ?? 0}
+            dueCount={dueCountByCourse[item.id] ?? 0}
             onPress={() => navigation.navigate('Course', { courseId: item.id, courseName: item.name })}
             onLongPress={() => {
               confirm(item.name, 'Vad vill du göra?', [
@@ -165,7 +174,6 @@ export default function CourseListScreen() {
                 },
               ]);
             }}
-            onDelete={() => handleDeleteCourse(item)}
           />
         ))
       )}
@@ -184,16 +192,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.cardBorder,
   },
-  headerTop: { flexDirection: 'row', alignItems: 'center' },
+  headerTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  caption: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, letterSpacing: 1.5 },
   heading: { fontFamily: fontFamily.serif, fontSize: fontSize['2xl'], color: colors.ink },
-  streakBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.highlight,
-    paddingVertical: 3, paddingHorizontal: spacing.sm,
-    borderRadius: 20,
+  addBtn: {
+    width: 44, height: 44, borderRadius: 14,
+    backgroundColor: colors.ink,
+    alignItems: 'center', justifyContent: 'center',
   },
-  streakText: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.ink },
-  list: { paddingTop: spacing.sm, paddingBottom: 100 },
+  addBtnText: { color: colors.paper, fontSize: 24, lineHeight: 28, fontFamily: fontFamily.body },
+  list: { paddingTop: spacing.sm, paddingBottom: spacing['2xl'] },
   empty: {
     alignItems: 'center',
     paddingTop: spacing['2xl'] * 1.5,
@@ -210,10 +218,4 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   emptyBtnText: { fontFamily: fontFamily.bodySemiBold, fontSize: fontSize.base, color: colors.paper },
-  fab: {
-    position: 'absolute', bottom: spacing.xl, right: spacing.xl,
-    backgroundColor: colors.ink, width: 56, height: 56,
-    borderRadius: 28, alignItems: 'center', justifyContent: 'center',
-  },
-  fabText: { color: colors.paper, fontSize: 28, lineHeight: 32, fontFamily: fontFamily.body },
 });

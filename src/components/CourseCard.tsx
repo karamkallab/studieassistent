@@ -1,10 +1,11 @@
 import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { colors, fontFamily, fontSize, radius, spacing, cardRotation } from '../theme/tokens';
 import { StaggerIn } from './StaggerIn';
 import { PressableScale } from './PressableScale';
 import { AnimatedProgressBar } from './AnimatedProgressBar';
 import { BookIcon } from './icons/BookIcon';
+import { ChevronRightIcon } from './icons/ChevronRightIcon';
 
 interface Course {
   id: string;
@@ -19,42 +20,37 @@ interface Props {
   index: number;
   onPress?: () => void;
   onLongPress?: () => void;
-  onDelete?: () => void;
+  docCount?: number;
+  cardCount?: number;
+  dueCount?: number;
   progress?: number | null; // fraction of cards not overdue, 0..1; null hides the bar
 }
 
-export function CourseCard({ course, index, onPress, onLongPress, onDelete, progress }: Props) {
+export function CourseCard({ course, index, onPress, onLongPress, docCount, cardCount, dueCount, progress }: Props) {
+  const metaParts = [
+    docCount != null ? `${docCount} DOKUMENT` : null,
+    cardCount != null ? `${cardCount} KORT` : null,
+    dueCount != null ? `${dueCount} ATT REPETERA` : null,
+  ].filter(Boolean);
+
   return (
     <StaggerIn index={index} rotateDeg={cardRotation(index)}>
       <PressableScale onPress={onPress} onLongPress={onLongPress} disabled={!onPress} style={styles.card}>
         <View style={styles.topRow}>
           <View style={[styles.iconBadge, { backgroundColor: course.color }]}>
-            <BookIcon size={18} color={colors.paper} />
+            <BookIcon size={22} color={colors.paper} />
           </View>
-          <Text style={styles.name} numberOfLines={1}>{course.name}</Text>
-          {onDelete && (
-            <TouchableOpacity
-              onPress={(e) => { e.stopPropagation(); onDelete(); }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={styles.deleteBtn}
-            >
-              <Text style={styles.deleteTxt}>✕</Text>
-            </TouchableOpacity>
-          )}
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={styles.name} numberOfLines={1}>{course.name}</Text>
+            {metaParts.length > 0 && (
+              <Text style={styles.meta} numberOfLines={2}>{metaParts.join(' · ')}</Text>
+            )}
+          </View>
+          {onPress && <ChevronRightIcon size={18} color={colors.inkMuted} />}
         </View>
-        {course.description ? (
-          <Text style={styles.description}>{course.description}</Text>
-        ) : null}
         {progress != null && (
           <AnimatedProgressBar progress={progress} color={course.color} />
         )}
-        <Text style={styles.date}>
-          {new Date(course.created_at).toLocaleDateString('sv-SE', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-          })}
-        </Text>
       </PressableScale>
     </StaggerIn>
   );
@@ -69,7 +65,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.cardBorder,
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
   topRow: {
     flexDirection: 'row',
@@ -77,34 +73,18 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   iconBadge: {
-    width: 34, height: 34, borderRadius: 10,
+    width: 48, height: 48, borderRadius: 14,
     alignItems: 'center', justifyContent: 'center',
   },
   name: {
-    flex: 1,
-    fontFamily: fontFamily.bodySemiBold,
-    fontSize: fontSize.base,
+    fontFamily: fontFamily.serif,
+    fontSize: fontSize.lg,
     color: colors.ink,
   },
-  deleteBtn: {
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 2,
-  },
-  deleteTxt: {
-    fontFamily: fontFamily.body,
-    fontSize: fontSize.sm,
-    color: colors.rust,
-  },
-  description: {
-    fontFamily: fontFamily.body,
-    fontSize: fontSize.sm,
-    color: colors.inkMuted,
-    lineHeight: 20,
-  },
-  date: {
+  meta: {
     fontFamily: fontFamily.mono,
     fontSize: fontSize.xs,
     color: colors.inkMuted,
-    marginTop: spacing.xs,
+    letterSpacing: 0.3,
   },
 });

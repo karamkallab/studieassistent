@@ -10,7 +10,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import type { AppStackParamList } from '../../navigation/AppNavigator';
 import { useConfirmDialog } from '../../components/ConfirmDialog';
-import { MonthCalendarModal } from '../../components/MonthCalendarModal';
+import { MonthCalendarGrid } from '../../components/MonthCalendarGrid';
 import { StaggerIn } from '../../components/StaggerIn';
 import { PressableScale } from '../../components/PressableScale';
 import { AnimatedCheck } from '../../components/AnimatedCheck';
@@ -25,21 +25,17 @@ const UNDO_WINDOW_MS = 4000;
 // reloaded mid-undo-window — an in-memory setTimeout alone doesn't survive that.
 const PENDING_DELETE_KEY = 'plan_pending_delete_v1';
 
-const DAY_NAMES = ['Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör', 'Sön'];
-const MONTH_NAMES = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
-
-function fmtDate(d: Date): string {
-  return `${d.getDate()} ${MONTH_NAMES[d.getMonth()]}`;
-}
+const DAY_LETTERS = ['MÅN', 'TIS', 'ONS', 'TOR', 'FRE', 'LÖR', 'SÖN'];
 
 export default function PlanScreen() {
   const { user } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const { plans, setPlans, loading, fetchRange, occurrencesOn, isDone, toggleDone } = usePlanCompletions(user?.id);
 
-  const [anchorDate, setAnchorDate] = useState(() => new Date());
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const [calendarYear, setCalendarYear] = useState(() => new Date().getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth());
   const [refreshing, setRefreshing] = useState(false);
-  const [calendarOpen, setCalendarOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{
     plan: StudyPlan;
     timer: ReturnType<typeof setTimeout>;
@@ -48,13 +44,14 @@ export default function PlanScreen() {
   pendingDeleteRef.current = pendingDelete;
   const { confirm, element: confirmDialog } = useConfirmDialog();
 
-  const monday = mondayOf(anchorDate);
+  const monday = mondayOf(selectedDate);
   const weekDates = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
     return d;
   });
   const todayStr = localDateStr(new Date());
+  const selectedDateStr = localDateStr(selectedDate);
 
   const fetchAll = useCallback(async () => {
     const sunday = new Date(monday);
@@ -64,6 +61,25 @@ export default function PlanScreen() {
   }, [fetchRange, monday.getTime()]);
 
   useFocusEffect(useCallback(() => { fetchAll(); }, [fetchAll]));
+
+  const selectDate = (date: Date) => {
+    setSelectedDate(date);
+    setCalendarYear(date.getFullYear());
+    setCalendarMonth(date.getMonth());
+  };
+
+  const shiftWeek = (deltaDays: number) => {
+    selectDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + deltaDays));
+  };
+
+  const changeCalendarMonth = (delta: number) => {
+    let m = calendarMonth + delta;
+    let y = calendarYear;
+    if (m < 0) { m = 11; y -= 1; }
+    if (m > 11) { m = 0; y += 1; }
+    setCalendarMonth(m);
+    setCalendarYear(y);
+  };
 
   const excludeOccurrence = async (plan: StudyPlan, dateStr: string) => {
     const prevExcluded = plan.excluded_dates ?? [];
@@ -163,21 +179,6 @@ export default function PlanScreen() {
     }
   };
 
-  const weekLabel = () => {
-    const mon = weekDates[0];
-    const sun = weekDates[6];
-    if (mon.getMonth() === sun.getMonth()) {
-      return `${mon.getDate()}–${sun.getDate()} ${MONTH_NAMES[mon.getMonth()]}`;
-    }
-    return `${mon.getDate()} ${MONTH_NAMES[mon.getMonth()]} – ${sun.getDate()} ${MONTH_NAMES[sun.getMonth()]}`;
-  };
-
-  const totalForWeek = weekDates.reduce((sum, d) => sum + occurrencesOn(d).length, 0);
-  const doneForWeek = weekDates.reduce(
-    (sum, d) => sum + occurrencesOn(d).filter(p => isDone(p.id, d)).length,
-    0,
-  );
-
   const hasPlansOn = useCallback((dateStr: string) => {
     const [y, m, d] = dateStr.split('-').map(Number);
     const date = new Date(y, m - 1, d);
@@ -188,7 +189,8 @@ export default function PlanScreen() {
     return <View style={s.center}><ActivityIndicator color={colors.ink} /></View>;
   }
 
-  let planCardIndex = 0;
+  const selectedPlans = occurrencesOn(selectedDate).slice().sort((a, b) => a.time_of_day.localeCompare(b.time_of_day));
+  const selectedDayLetter = DAY_LETTERS[dbDayIndex(selectedDate)];
 
   return (
     <ScreenContainer
@@ -202,29 +204,39 @@ export default function PlanScreen() {
       }
       header={
         <View style={s.header}>
-          <Text style={s.heading}>Planera</Text>
-          <View style={s.weekNav}>
-            <TouchableOpacity
-              onPress={() => setAnchorDate(d => { const n = new Date(d); n.setDate(n.getDate() - 7); return n; })}
-              style={s.weekBtn}
-            >
-              <Text style={s.weekBtnTxt}>‹</Text>
+          <Text style={s.caption}>PLANERING</Text>
+          <Text style={s.heading}>Studieplan</Text>
+
+          <View style={s.dayRow}>
+            <TouchableOpacity onPress={() => shiftWeek(-7)} style={s.weekArrow}>
+              <Text style={s.weekArrowTxt}>‹</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setCalendarOpen(true)} style={s.weekLabelBtn}>
-              <Text style={s.weekLabel}>{weekLabel()}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => setAnchorDate(d => { const n = new Date(d); n.setDate(n.getDate() + 7); return n; })}
-              style={s.weekBtn}
-            >
-              <Text style={s.weekBtnTxt}>›</Text>
+            <View style={s.dayCells}>
+              {weekDates.map(date => {
+                const dateStr = localDateStr(date);
+                const isSelected = dateStr === selectedDateStr;
+                const hasPlans = hasPlansOn(dateStr);
+                return (
+                  <TouchableOpacity key={dateStr} style={s.dayCell} onPress={() => selectDate(date)}>
+                    <Text style={s.dayLetter}>{DAY_LETTERS[dbDayIndex(date)]}</Text>
+                    <View style={[s.dayCircle, isSelected && s.dayCircleSelected]}>
+                      <Text style={[s.dayNum, isSelected && s.dayNumSelected]}>{date.getDate()}</Text>
+                    </View>
+                    {isSelected ? (
+                      <View style={s.dayUnderline} />
+                    ) : hasPlans ? (
+                      <View style={s.dayDot} />
+                    ) : (
+                      <View style={s.dayDotSpacer} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <TouchableOpacity onPress={() => shiftWeek(7)} style={s.weekArrow}>
+              <Text style={s.weekArrowTxt}>›</Text>
             </TouchableOpacity>
           </View>
-          {totalForWeek > 0 && (
-            <Text style={s.weekProgress}>
-              {doneForWeek} av {totalForWeek} pass klara denna vecka
-            </Text>
-          )}
         </View>
       }
       overlay={
@@ -248,87 +260,73 @@ export default function PlanScreen() {
           )}
 
           {confirmDialog}
-
-          <MonthCalendarModal
-            visible={calendarOpen}
-            onClose={() => setCalendarOpen(false)}
-            initialMonth={anchorDate}
-            onSelectDate={setAnchorDate}
-            hasPlansOn={hasPlansOn}
-          />
         </>
       }
     >
-        {totalForWeek === 0 ? (
-          <View style={s.emptyWeek}>
-            <Text style={s.emptyWeekIcon}>📅</Text>
-            <Text style={s.emptyWeekTitle}>Inga pass denna vecka</Text>
-            <Text style={s.emptyWeekSubtitle}>
-              Tryck på + för att lägga till ditt första studiepass.
-            </Text>
+      <View style={s.daySection}>
+        <Text style={s.passCount}>
+          {selectedPlans.length} PASS · {selectedDayLetter}
+        </Text>
+
+        {selectedPlans.length === 0 ? (
+          <View style={s.emptyDay}>
+            <Text style={s.emptyDayTxt}>Inga pass denna dag.</Text>
           </View>
-        ) : weekDates.map(date => {
-          const dayPlans = occurrencesOn(date);
-          const dateStr = localDateStr(date);
-          const isToday = dateStr === todayStr;
-          return (
-            <View key={dateStr} style={s.daySection}>
-              <View style={s.dayHeader}>
-                <Text style={[s.dayName, isToday && s.dayNameToday]}>
-                  {DAY_NAMES[dbDayIndex(date)]}
-                </Text>
-                <Text style={[s.dayDate, isToday && s.dayDateToday]}>{fmtDate(date)}</Text>
-                {isToday && <View style={s.todayDot} />}
-              </View>
-              {dayPlans.length === 0 ? (
-                <Text style={s.emptyDay}>–</Text>
-              ) : (
-                dayPlans.map(plan => {
-                  const done = isDone(plan.id, date);
-                  const courseName = plan.courses ? plan.courses.name : null;
-                  const courseColor = plan.courses?.color;
-                  const index = planCardIndex++;
-                  return (
-                    <StaggerIn key={plan.id} index={index}>
-                      <View
-                        style={[
-                          s.planCard, done && s.planCardDone,
-                          { borderLeftWidth: 4, borderLeftColor: courseColor ?? colors.cardBorder },
-                        ]}
-                      >
-                        <PressableScale
-                          onPress={() => toggleDone(plan.id, date)}
-                          style={s.doneBtn}
-                        >
-                          <View style={[s.doneCircle, done && s.doneCircleFilled]}>
-                            {done && <AnimatedCheck size={12} />}
-                          </View>
-                        </PressableScale>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[s.planTitle, done && s.planTitleDone]}>{plan.title}</Text>
-                          <Text style={s.planMeta}>
-                            {plan.time_of_day?.slice(0, 5)} · {plan.duration_minutes} min
-                            {courseName ? <Text style={{ color: courseColor }}> · {courseName}</Text> : ''}
-                            {plan.recurring ? ' · återkommande' : ''}
-                          </Text>
-                        </View>
-                        <TouchableOpacity
-                          onPress={() => navigation.navigate('CreatePlan', { planId: plan.id })}
-                          style={s.editBtn}
-                        >
-                          <Text style={s.editTxt}>Redigera</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => handleDelete(plan, dateStr)} style={s.editBtn}>
-                          <Text style={[s.editTxt, { color: colors.rust }]}>✕</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </StaggerIn>
-                  );
-                })
-              )}
-            </View>
-          );
-        })}
+        ) : (
+          selectedPlans.map((plan, index) => {
+            const done = isDone(plan.id, selectedDate);
+            const courseName = plan.courses ? plan.courses.name : null;
+            const courseColor = plan.courses?.color;
+            return (
+              <StaggerIn key={plan.id} index={index}>
+                <View
+                  style={[
+                    s.planCard, done && s.planCardDone,
+                    { borderLeftWidth: 4, borderLeftColor: courseColor ?? colors.cardBorder },
+                  ]}
+                >
+                  <PressableScale
+                    onPress={() => toggleDone(plan.id, selectedDate)}
+                    style={s.doneBtn}
+                  >
+                    <View style={[s.doneCircle, done && s.doneCircleFilled]}>
+                      {done && <AnimatedCheck size={12} />}
+                    </View>
+                  </PressableScale>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.planTitle, done && s.planTitleDone]}>{plan.title}</Text>
+                    <Text style={s.planMeta}>
+                      {plan.time_of_day?.slice(0, 5)} · {plan.duration_minutes} min
+                      {courseName ? <Text style={{ color: courseColor }}> · {courseName}</Text> : ''}
+                      {plan.recurring ? ' · återkommande' : ''}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('CreatePlan', { planId: plan.id })}
+                    style={s.editBtn}
+                  >
+                    <Text style={s.editTxt}>Redigera</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleDelete(plan, selectedDateStr)} style={s.editBtn}>
+                    <Text style={[s.editTxt, { color: colors.rust }]}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              </StaggerIn>
+            );
+          })
+        )}
+      </View>
+
+      <View style={s.calendarSection}>
+        <MonthCalendarGrid
+          year={calendarYear}
+          month={calendarMonth}
+          onPrevMonth={() => changeCalendarMonth(-1)}
+          onNextMonth={() => changeCalendarMonth(1)}
+          onSelectDate={selectDate}
+          hasPlansOn={hasPlansOn}
+        />
+      </View>
     </ScreenContainer>
   );
 }
@@ -339,45 +337,37 @@ const s = StyleSheet.create({
   header: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.xl,
-    paddingBottom: spacing.sm,
-    gap: spacing.sm,
+    paddingBottom: spacing.md,
+    gap: spacing.xs,
     borderBottomWidth: 1,
     borderBottomColor: colors.cardBorder,
   },
-  heading: { fontFamily: fontFamily.serif, fontSize: fontSize['2xl'], color: colors.ink },
+  caption: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, letterSpacing: 1.5 },
+  heading: { fontFamily: fontFamily.serif, fontSize: fontSize['2xl'], color: colors.ink, marginBottom: spacing.sm },
 
-  weekNav: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  weekBtn: { padding: spacing.xs, minWidth: 32, alignItems: 'center' },
-  weekBtnTxt: { fontFamily: fontFamily.body, fontSize: fontSize.xl, color: colors.inkMuted },
-  weekLabelBtn: { flex: 1, paddingVertical: spacing.xs },
-  weekLabel: { fontFamily: fontFamily.mono, fontSize: fontSize.sm, color: colors.ink, textDecorationLine: 'underline' },
-  weekProgress: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted },
+  dayRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  weekArrow: { padding: spacing.xs, minWidth: 24, alignItems: 'center' },
+  weekArrowTxt: { fontFamily: fontFamily.body, fontSize: fontSize.xl, color: colors.inkMuted },
+  dayCells: { flex: 1, flexDirection: 'row', justifyContent: 'space-between' },
+  dayCell: { alignItems: 'center', gap: 4 },
+  dayLetter: { fontFamily: fontFamily.mono, fontSize: 9, color: colors.inkMuted, letterSpacing: 0.3 },
+  dayCircle: {
+    width: 32, height: 32, borderRadius: 16,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  dayCircleSelected: { backgroundColor: colors.highlight },
+  dayNum: { fontFamily: fontFamily.body, fontSize: fontSize.sm, color: colors.ink },
+  dayNumSelected: { fontFamily: fontFamily.bodySemiBold, color: colors.ink },
+  dayDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.inkMuted },
+  dayDotSpacer: { width: 4, height: 4 },
+  dayUnderline: { width: 14, height: 2, borderRadius: 1, backgroundColor: colors.highlight },
 
-  scroll: { paddingBottom: 100 },
+  scroll: { paddingBottom: 100, gap: spacing.lg },
 
   daySection: { paddingHorizontal: spacing.md, paddingTop: spacing.md, gap: spacing.sm },
-  dayHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  dayName: { fontFamily: fontFamily.mono, fontSize: fontSize.sm, color: colors.inkMuted, width: 28 },
-  dayNameToday: { color: colors.ink, fontFamily: fontFamily.monoMedium },
-  dayDate: { fontFamily: fontFamily.mono, fontSize: fontSize.sm, color: colors.inkMuted },
-  dayDateToday: { color: colors.ink },
-  todayDot: {
-    width: 6, height: 6, borderRadius: 3,
-    backgroundColor: colors.highlight,
-  },
-  emptyDay: {
-    fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.cardBorder,
-    paddingLeft: spacing.xl,
-  },
-  emptyWeek: {
-    alignItems: 'center', paddingTop: spacing['2xl'] * 1.5, paddingHorizontal: spacing.xl, gap: spacing.sm,
-  },
-  emptyWeekIcon: { fontSize: 40, marginBottom: spacing.xs },
-  emptyWeekTitle: { fontFamily: fontFamily.bodySemiBold, fontSize: fontSize.lg, color: colors.ink },
-  emptyWeekSubtitle: {
-    fontFamily: fontFamily.body, fontSize: fontSize.base, color: colors.inkMuted,
-    textAlign: 'center', lineHeight: 22,
-  },
+  passCount: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, letterSpacing: 1.5 },
+  emptyDay: { paddingVertical: spacing.lg, alignItems: 'center' },
+  emptyDayTxt: { fontFamily: fontFamily.body, fontSize: fontSize.base, color: colors.inkMuted },
 
   planCard: {
     flexDirection: 'row', alignItems: 'center',
@@ -397,6 +387,8 @@ const s = StyleSheet.create({
   planMeta: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, marginTop: 1 },
   editBtn: { paddingHorizontal: spacing.xs, paddingVertical: 2 },
   editTxt: { fontFamily: fontFamily.body, fontSize: fontSize.xs, color: colors.inkMuted, textDecorationLine: 'underline' },
+
+  calendarSection: { paddingHorizontal: spacing.md },
 
   fab: {
     position: 'absolute', bottom: spacing.xl, right: spacing.xl,

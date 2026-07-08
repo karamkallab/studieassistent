@@ -18,7 +18,6 @@ import MindmapScreen from '../screens/mindmap/MindmapScreen';
 import UpgradeScreen from '../screens/upgrade/UpgradeScreen';
 import SummaryScreen from '../screens/summary/SummaryScreen';
 import EditCourseScreen from '../screens/courses/EditCourseScreen';
-import StudyModeScreen from '../screens/study/StudyModeScreen';
 import WriteScreen from '../screens/study/WriteScreen';
 import MatchScreen from '../screens/study/MatchScreen';
 import FocusScreen from '../screens/focus/FocusScreen';
@@ -26,6 +25,11 @@ import HomeScreen from '../screens/home/HomeScreen';
 import PlanScreen from '../screens/plan/PlanScreen';
 import CreatePlanScreen from '../screens/plan/CreatePlanScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
+import { SunIcon } from '../components/icons/SunIcon';
+import { BookIcon } from '../components/icons/BookIcon';
+import { TargetIcon } from '../components/icons/TargetIcon';
+import { CalendarIcon } from '../components/icons/CalendarIcon';
+import { PersonIcon } from '../components/icons/PersonIcon';
 import { colors, fontFamily, fontSize } from '../theme/tokens';
 
 export type AuthStackParamList = {
@@ -37,7 +41,6 @@ export type AppStackParamList = {
   Main: undefined;
   CreateCourse: undefined;
   Course: { courseId: string; courseName: string };
-  StudyMode: { courseId: string; courseName: string };
   CreateFlashcard: { courseId: string; cardId?: string };
   Review: { courseId: string; courseName: string };
   ReviewComplete: { count: number; streakDays: number };
@@ -71,12 +74,12 @@ const stackOptions = {
   headerShadowVisible: false,
 };
 
-const TAB_ICONS: Record<string, string> = {
-  Home: '⌂',
-  Kurser: '▣',
-  Fokus: '◎',
-  Planera: '▦',
-  Profil: '○',
+const TAB_ICONS: Record<string, React.ComponentType<{ size?: number; color?: string; strokeWidth?: number }>> = {
+  Home: SunIcon,
+  Kurser: BookIcon,
+  Fokus: TargetIcon,
+  Planera: CalendarIcon,
+  Profil: PersonIcon,
 };
 
 function AuthNavigator() {
@@ -103,9 +106,10 @@ function TabNavigator() {
         tabBarActiveTintColor: colors.ink,
         tabBarInactiveTintColor: colors.inkMuted,
         tabBarLabelStyle: { fontFamily: fontFamily.mono, fontSize: 9, letterSpacing: 0.5 },
-        tabBarIcon: ({ color }) => (
-          <Text style={{ color, fontSize: 18, lineHeight: 22 }}>{TAB_ICONS[route.name]}</Text>
-        ),
+        tabBarIcon: ({ color }) => {
+          const Icon = TAB_ICONS[route.name];
+          return <Icon size={20} color={color} strokeWidth={1.75} />;
+        },
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ tabBarLabel: 'Idag' }} />
@@ -126,11 +130,6 @@ function MainNavigator() {
         name="Course"
         component={CourseScreen}
         options={({ route }) => ({ title: route.params.courseName })}
-      />
-      <AppStack.Screen
-        name="StudyMode"
-        component={StudyModeScreen}
-        options={{ title: 'Plugglägen' }}
       />
       <AppStack.Screen
         name="CreateFlashcard"

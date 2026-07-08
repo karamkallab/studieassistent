@@ -7,8 +7,13 @@ import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { ScreenContainer } from '../../components/ScreenContainer';
-import { getStreak } from '../../lib/streak';
+import { getStreakStats } from '../../lib/streak';
 import { requestPermission, scheduleDailyReview, cancelDailyReview } from '../../lib/notifications';
+import { BoltIcon } from '../../components/icons/BoltIcon';
+import { HelpCircleIcon } from '../../components/icons/HelpCircleIcon';
+import { ShieldIcon } from '../../components/icons/ShieldIcon';
+import { LogoutIcon } from '../../components/icons/LogoutIcon';
+import { ChevronRightIcon } from '../../components/icons/ChevronRightIcon';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 
 type Settings = {
@@ -27,56 +32,26 @@ const DEFAULT_SETTINGS: Settings = {
   focus_notifs: true,
 };
 
+const APP_VERSION = '1.0.0';
+
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
 
   const [streak, setStreak] = useState(0);
-  const [weeklyFocus, setWeeklyFocus] = useState(0);
-  const [weeklyPassDone, setWeeklyPassDone] = useState(0);
-  const [weeklyPassTotal, setWeeklyPassTotal] = useState(0);
+  const [longestStreak, setLongestStreak] = useState(0);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const fetchAll = useCallback(async () => {
-    const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
-    const today = new Date();
-    const dbDay = (today.getDay() + 6) % 7;
-    const monday = new Date(today.getTime() - dbDay * 86400000);
-    monday.setHours(0, 0, 0, 0);
-    const mondayStr = monday.toISOString().split('T')[0];
-
-    const [
-      streakDays,
-      { data: focusSessions },
-      { data: settingsData },
-      { data: allPlans },
-      { data: weekComps },
-    ] = await Promise.all([
-      getStreak(user!.id),
-      supabase.from('focus_sessions').select('minutes')
-        .eq('user_id', user!.id).gte('completed_at', weekAgo),
+    const [{ current, longest }, { data: settingsData }] = await Promise.all([
+      getStreakStats(user!.id),
       supabase.from('user_settings').select('*').eq('user_id', user!.id).maybeSingle(),
-      supabase.from('study_plans').select('id, weekdays, specific_date, recurring').eq('user_id', user!.id),
-      supabase.from('study_plan_completions').select('plan_id').gte('completed_on', mondayStr),
     ]);
 
-    setStreak(streakDays);
-    setWeeklyFocus((focusSessions ?? []).reduce((s, r) => s + r.minutes, 0));
+    setStreak(current);
+    setLongestStreak(longest);
     if (settingsData) setSettings({ ...DEFAULT_SETTINGS, ...settingsData });
-
-    // Count this week's plans
-    let total = 0;
-    for (let d = 0; d < 7; d++) {
-      const dayDate = new Date(monday.getTime() + d * 86400000);
-      const dayStr = dayDate.toISOString().split('T')[0];
-      for (const plan of allPlans ?? []) {
-        if (plan.specific_date === dayStr) { total++; continue; }
-        if (plan.recurring && Array.isArray(plan.weekdays) && plan.weekdays.includes(d)) total++;
-      }
-    }
-    setWeeklyPassTotal(total);
-    setWeeklyPassDone((weekComps ?? []).length);
     setLoading(false);
   }, [user]);
 
@@ -118,18 +93,18 @@ export default function ProfileScreen() {
     saveSettings(updated);
   };
 
-  const adjustNum = (key: keyof Settings, delta: number, min: number, max: number) => {
-    const val = Math.min(max, Math.max(min, (settings[key] as number) + delta));
-    const updated = { ...settings, [key]: val };
+  const adjustHour = (delta: number) => {
+    const val = Math.min(23, Math.max(0, settings.daily_review_hour + delta));
+    const updated = { ...settings, daily_review_hour: val };
     setSettings(updated);
     saveSettings(updated);
   };
 
-  const fmtFocus = (mins: number) =>
-    mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
-
   const fmtTime = (h: number, m: number) =>
     `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+  const emailLocalPart = user?.email?.split('@')[0] ?? '';
+  const initials = emailLocalPart.slice(0, 2).toUpperCase() || '?';
 
   if (loading) {
     return <View style={s.center}><ActivityIndicator color={colors.ink} /></View>;
@@ -138,23 +113,46 @@ export default function ProfileScreen() {
   return (
     <ScreenContainer contentContainerStyle={s.content}>
       <View style={s.header}>
+        <Text style={s.caption}>KONTO</Text>
         <Text style={s.heading}>Profil</Text>
-        {user?.email && <Text style={s.email}>{user.email}</Text>}
       </View>
 
-      {/* Stats */}
-      <View style={s.statsRow}>
-        <View style={s.statCard}>
-          <Text style={s.statValue}>{streak}</Text>
-          <Text style={s.statLabel}>{streak === 1 ? 'dag' : 'dagar'}{'\n'}i rad</Text>
+      {/* Account card */}
+      <View style={s.accountCard}>
+        <View style={s.avatar}>
+          <Text style={s.avatarTxt}>{initials}</Text>
         </View>
-        <View style={s.statCard}>
-          <Text style={s.statValue}>{fmtFocus(weeklyFocus)}</Text>
-          <Text style={s.statLabel}>fokustid{'\n'}denna vecka</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={s.accountName} numberOfLines={1}>{emailLocalPart}</Text>
+          <Text style={s.accountEmail} numberOfLines={1}>{user?.email}</Text>
         </View>
-        <View style={s.statCard}>
-          <Text style={s.statValue}>{weeklyPassDone}/{weeklyPassTotal}</Text>
-          <Text style={s.statLabel}>pass{'\n'}denna vecka</Text>
+      </View>
+
+      {/* Streak card */}
+      <View style={s.streakCard}>
+        <View style={s.streakIconBox}>
+          <BoltIcon size={20} color={colors.ink} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.streakLabel}>NUVARANDE STREAK</Text>
+          <Text style={s.streakValue}>{streak} {streak === 1 ? 'dag' : 'dagar'}</Text>
+          <Text style={s.streakBest}>Bäst: {longestStreak} {longestStreak === 1 ? 'dag' : 'dagar'}</Text>
+        </View>
+      </View>
+
+      {/* Language */}
+      <Text style={s.sectionLbl}>SPRÅK</Text>
+      <View style={s.settingsCard}>
+        <View style={s.settingRow}>
+          <Text style={s.settingLabel}>Appspråk</Text>
+          <View style={s.langToggle}>
+            <View style={[s.langOption, s.langOptionActive]}>
+              <Text style={[s.langTxt, s.langTxtActive]}>Svenska</Text>
+            </View>
+            <View style={s.langOption}>
+              <Text style={s.langTxt}>English</Text>
+            </View>
+          </View>
         </View>
       </View>
 
@@ -163,11 +161,8 @@ export default function ProfileScreen() {
       <View style={s.settingsCard}>
         <View style={s.settingRow}>
           <View style={{ flex: 1 }}>
-            <Text style={s.settingLabel}>Daglig repetitionspåminnelse</Text>
-            <Text style={s.settingMeta}>
-              {settings.daily_review_enabled
-                ? `Kl. ${fmtTime(settings.daily_review_hour, settings.daily_review_minute)}`
-                : 'Avaktiverad'}
+            <Text style={s.settingLabel}>
+              Daglig repetition {settings.daily_review_enabled ? `(${fmtTime(settings.daily_review_hour, settings.daily_review_minute)})` : ''}
             </Text>
           </View>
           <Switch
@@ -185,19 +180,13 @@ export default function ProfileScreen() {
             <View style={s.settingRow}>
               <Text style={s.settingLabel}>Tid för påminnelse</Text>
               <View style={s.timeRow}>
-                <TouchableOpacity
-                  onPress={() => adjustNum('daily_review_hour', -1, 0, 23)}
-                  style={s.adjBtn} disabled={saving}
-                >
+                <TouchableOpacity onPress={() => adjustHour(-1)} style={s.adjBtn} disabled={saving}>
                   <Text style={s.adjTxt}>−</Text>
                 </TouchableOpacity>
                 <Text style={s.timeVal}>
                   {fmtTime(settings.daily_review_hour, settings.daily_review_minute)}
                 </Text>
-                <TouchableOpacity
-                  onPress={() => adjustNum('daily_review_hour', 1, 0, 23)}
-                  style={s.adjBtn} disabled={saving}
-                >
+                <TouchableOpacity onPress={() => adjustHour(1)} style={s.adjBtn} disabled={saving}>
                   <Text style={s.adjTxt}>+</Text>
                 </TouchableOpacity>
               </View>
@@ -207,7 +196,7 @@ export default function ProfileScreen() {
 
         <View style={s.divider} />
         <View style={s.settingRow}>
-          <Text style={s.settingLabel}>Notiser för studiepass</Text>
+          <Text style={s.settingLabel}>Påminnelser för studiepass</Text>
           <Switch
             value={settings.study_plan_notifs}
             onValueChange={() => toggle('study_plan_notifs')}
@@ -219,7 +208,7 @@ export default function ProfileScreen() {
 
         <View style={s.divider} />
         <View style={s.settingRow}>
-          <Text style={s.settingLabel}>Notiser för fokustimer</Text>
+          <Text style={s.settingLabel}>Fokuspass slutfört</Text>
           <Switch
             value={settings.focus_notifs}
             onValueChange={() => toggle('focus_notifs')}
@@ -230,39 +219,79 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Sign out */}
-      <TouchableOpacity
-        style={s.signOutBtn}
-        onPress={() => Alert.alert('Logga ut?', '', [
-          { text: 'Avbryt', style: 'cancel' },
-          { text: 'Logga ut', style: 'destructive', onPress: signOut },
-        ])}
-        activeOpacity={0.7}
-      >
-        <Text style={s.signOutTxt}>Logga ut</Text>
-      </TouchableOpacity>
+      {/* App */}
+      <Text style={s.sectionLbl}>APP</Text>
+      <View style={s.settingsCard}>
+        <TouchableOpacity
+          style={s.linkRow}
+          onPress={() => Alert.alert('Hjälp & Support', 'Behöver du hjälp? Mejla oss på support@studieassistenten.se')}
+        >
+          <HelpCircleIcon size={18} color={colors.ink} />
+          <Text style={s.linkTxt}>Hjälp & Support</Text>
+          <ChevronRightIcon size={16} color={colors.inkMuted} />
+        </TouchableOpacity>
+        <View style={s.divider} />
+        <TouchableOpacity
+          style={s.linkRow}
+          onPress={() => Alert.alert('Integritetspolicy', 'Din data används endast för att driva appens funktioner och delas inte med tredje part.')}
+        >
+          <ShieldIcon size={18} color={colors.ink} />
+          <Text style={s.linkTxt}>Integritetspolicy</Text>
+          <ChevronRightIcon size={16} color={colors.inkMuted} />
+        </TouchableOpacity>
+        <View style={s.divider} />
+        <TouchableOpacity
+          style={s.linkRow}
+          onPress={() => Alert.alert('Logga ut?', '', [
+            { text: 'Avbryt', style: 'cancel' },
+            { text: 'Logga ut', style: 'destructive', onPress: signOut },
+          ])}
+        >
+          <LogoutIcon size={18} color={colors.rust} />
+          <Text style={[s.linkTxt, { color: colors.rust }]}>Logga ut</Text>
+        </TouchableOpacity>
+      </View>
+
+      <Text style={s.version}>Studieassistenten · v{APP_VERSION}</Text>
     </ScreenContainer>
   );
 }
 
 const s = StyleSheet.create({
-  content: { padding: spacing.md, gap: spacing.lg, paddingBottom: spacing['2xl'] },
+  content: { padding: spacing.md, gap: spacing.md, paddingBottom: spacing['2xl'] },
   center: { flex: 1, backgroundColor: colors.paper, justifyContent: 'center', alignItems: 'center' },
 
-  header: { paddingTop: spacing.xl, gap: spacing.xs },
+  header: { paddingTop: spacing.xl, gap: spacing.xs, marginBottom: spacing.xs },
+  caption: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, letterSpacing: 1.5 },
   heading: { fontFamily: fontFamily.serif, fontSize: fontSize['2xl'], color: colors.ink },
-  email: { fontFamily: fontFamily.mono, fontSize: fontSize.sm, color: colors.inkMuted },
 
-  statsRow: { flexDirection: 'row', gap: spacing.sm },
-  statCard: {
-    flex: 1, backgroundColor: colors.cardBg,
-    borderWidth: 1, borderColor: colors.cardBorder, borderRadius: radius.card,
-    padding: spacing.md, alignItems: 'center', gap: spacing.xs,
+  accountCard: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    backgroundColor: colors.cardBg, borderWidth: 1, borderColor: colors.cardBorder,
+    borderRadius: radius.card, padding: spacing.md,
   },
-  statValue: { fontFamily: fontFamily.serif, fontSize: fontSize.xl, color: colors.ink },
-  statLabel: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, textAlign: 'center', lineHeight: 16 },
+  avatar: {
+    width: 48, height: 48, borderRadius: 14,
+    backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center',
+  },
+  avatarTxt: { fontFamily: fontFamily.serif, fontSize: fontSize.base, color: colors.paper },
+  accountName: { fontFamily: fontFamily.serif, fontSize: fontSize.lg, color: colors.ink, textTransform: 'capitalize' },
+  accountEmail: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, marginTop: 2 },
 
-  sectionLbl: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, letterSpacing: 1.5 },
+  streakCard: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    backgroundColor: colors.cardBg, borderWidth: 1, borderColor: colors.cardBorder,
+    borderRadius: radius.card, padding: spacing.md,
+  },
+  streakIconBox: {
+    width: 48, height: 48, borderRadius: 14,
+    backgroundColor: colors.highlight, alignItems: 'center', justifyContent: 'center',
+  },
+  streakLabel: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, letterSpacing: 1 },
+  streakValue: { fontFamily: fontFamily.serif, fontSize: fontSize.xl, color: colors.ink, marginTop: 2 },
+  streakBest: { fontFamily: fontFamily.body, fontSize: fontSize.sm, color: colors.inkMuted, marginTop: 2 },
+
+  sectionLbl: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, letterSpacing: 1.5, marginTop: spacing.xs },
 
   settingsCard: {
     backgroundColor: colors.cardBg, borderWidth: 1,
@@ -273,8 +302,16 @@ const s = StyleSheet.create({
     padding: spacing.md, gap: spacing.sm,
   },
   settingLabel: { fontFamily: fontFamily.bodySemiBold, fontSize: fontSize.base, color: colors.ink },
-  settingMeta: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, marginTop: 2 },
   divider: { height: 1, backgroundColor: colors.cardBorder, marginHorizontal: spacing.md },
+
+  langToggle: {
+    flexDirection: 'row', backgroundColor: colors.paper, borderRadius: 20,
+    borderWidth: 1, borderColor: colors.cardBorder, padding: 3,
+  },
+  langOption: { paddingVertical: 6, paddingHorizontal: spacing.sm, borderRadius: 16 },
+  langOptionActive: { backgroundColor: colors.ink },
+  langTxt: { fontFamily: fontFamily.body, fontSize: fontSize.sm, color: colors.inkMuted },
+  langTxtActive: { color: colors.paper, fontFamily: fontFamily.bodySemiBold },
 
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   timeVal: { fontFamily: fontFamily.mono, fontSize: fontSize.base, color: colors.ink, minWidth: 40, textAlign: 'center' },
@@ -285,10 +322,11 @@ const s = StyleSheet.create({
   },
   adjTxt: { fontFamily: fontFamily.bodySemiBold, fontSize: fontSize.base, color: colors.ink },
 
-  signOutBtn: {
-    marginTop: spacing.sm, padding: spacing.md,
-    borderRadius: radius.button, borderWidth: 1, borderColor: colors.cardBorder,
-    alignItems: 'center',
+  linkRow: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    padding: spacing.md,
   },
-  signOutTxt: { fontFamily: fontFamily.body, fontSize: fontSize.base, color: colors.rust },
+  linkTxt: { flex: 1, fontFamily: fontFamily.body, fontSize: fontSize.base, color: colors.ink },
+
+  version: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, textAlign: 'center', marginTop: spacing.sm },
 });

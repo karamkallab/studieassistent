@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, Pressable, AppState, AppStateStatus, Alert,
+  View, Text, StyleSheet, AppState, AppStateStatus, Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Circle } from 'react-native-svg';
@@ -9,18 +9,25 @@ import { useAuth } from '../../context/AuthContext';
 import { scheduleTimerNotif, cancelTimerNotif } from '../../lib/notifications';
 import { PressableScale } from '../../components/PressableScale';
 import { ScreenContainer } from '../../components/ScreenContainer';
+import { AnimatedProgressBar } from '../../components/AnimatedProgressBar';
+import { RotateCcwIcon } from '../../components/icons/RotateCcwIcon';
+import { PlayIcon } from '../../components/icons/PlayIcon';
+import { PauseIcon } from '../../components/icons/PauseIcon';
+import { SkipForwardIcon } from '../../components/icons/SkipForwardIcon';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 
 type Phase = 'work' | 'break';
 type TimerState = 'idle' | 'running' | 'paused';
 
 const TIMER_KEY = 'focus_timer_state';
-const RADIUS = 88;
-const STROKE = 16;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-const SIZE = (RADIUS + STROKE) * 2 + 4;
+const RADIUS = 100;
+const STROKE = 2;
+const DOT_RADIUS = 7;
+const SIZE = (RADIUS + DOT_RADIUS) * 2 + 4;
+const PRESETS = [15, 25, 45, 50];
 
 type Course = { id: string; name: string; color: string };
+type CourseMinutes = { id: string; name: string; color: string; minutes: number };
 
 export default function FocusScreen() {
   const { user } = useAuth();
@@ -30,23 +37,41 @@ export default function FocusScreen() {
   const [phase, setPhase] = useState<Phase>('work');
   const [timerState, setTimerState] = useState<TimerState>('idle');
   const [remaining, setRemaining] = useState(25 * 60);
-  const [weeklyMinutes, setWeeklyMinutes] = useState(0);
+  const [weeklyTotalMinutes, setWeeklyTotalMinutes] = useState(0);
+  const [courseBreakdown, setCourseBreakdown] = useState<CourseMinutes[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [courseId, setCourseId] = useState<string | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [savingSettings, setSavingSettings] = useState(false);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sessionStartRef = useRef<number | null>(null);
   const appStateRef = useRef(AppState.currentState);
 
+  const loadWeeklyStats = useCallback(async () => {
+    const [{ data: sessions }, { data: courseData }] = await Promise.all([
+      supabase.from('focus_sessions').select('minutes, course_id')
+        .eq('user_id', user!.id).gte('completed_at', new Date(Date.now() - 7 * 86400000).toISOString()),
+      supabase.from('courses').select('id, name, color').order('created_at'),
+    ]);
+
+    setWeeklyTotalMinutes((sessions ?? []).reduce((s, r) => s + r.minutes, 0));
+
+    const byCourse = new Map<string, number>();
+    for (const s of sessions ?? []) {
+      if (!s.course_id) continue;
+      byCourse.set(s.course_id, (byCourse.get(s.course_id) ?? 0) + s.minutes);
+    }
+    const breakdown = (courseData ?? [])
+      .map(c => ({ id: c.id, name: c.name, color: c.color, minutes: byCourse.get(c.id) ?? 0 }))
+      .filter(c => c.minutes > 0)
+      .sort((a, b) => b.minutes - a.minutes);
+    setCourseBreakdown(breakdown);
+  }, [user]);
+
   useEffect(() => {
     (async () => {
-      const [{ data: settingsData }, { data: sessionData }, { data: courseData }] = await Promise.all([
+      const [{ data: settingsData }, { data: courseData }] = await Promise.all([
         supabase.from('user_settings').select('focus_work_minutes, focus_break_minutes')
           .eq('user_id', user!.id).maybeSingle(),
-        supabase.from('focus_sessions').select('minutes')
-          .eq('user_id', user!.id).gte('completed_at', new Date(Date.now() - 7 * 86400000).toISOString()),
         supabase.from('courses').select('id, name, color').order('created_at'),
       ]);
 
@@ -55,8 +80,8 @@ export default function FocusScreen() {
         setBreakMins(settingsData.focus_break_minutes);
         setRemaining(settingsData.focus_work_minutes * 60);
       }
-      setWeeklyMinutes((sessionData ?? []).reduce((s, r) => s + r.minutes, 0));
       setCourses(courseData ?? []);
+      await loadWeeklyStats();
 
       const saved = await AsyncStorage.getItem(TIMER_KEY);
       if (saved) {
@@ -122,7 +147,7 @@ export default function FocusScreen() {
           user_id: user!.id, course_id: courseId, minutes: mins,
           completed_at: new Date().toISOString(),
         });
-        setWeeklyMinutes(w => w + mins);
+        loadWeeklyStats();
       }
       Alert.alert('Bra jobbat!', 'Fokusperiod klar. Ta en paus.');
       setPhase('break');
@@ -149,6 +174,14 @@ export default function FocusScreen() {
     cancelTimerNotif();
   };
 
+  const handleSkip = () => {
+    if (timerState === 'idle') return;
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    cancelTimerNotif();
+    setTimerState('idle');
+    handlePhaseEnd(phase);
+  };
+
   const handleReset = () => {
     if (intervalRef.current) clearInterval(intervalRef.current);
     cancelTimerNotif();
@@ -158,143 +191,93 @@ export default function FocusScreen() {
   };
 
   const saveFocusSettings = async (work: number, brk: number) => {
-    setSavingSettings(true);
-    try {
-      await supabase.from('user_settings')
-        .upsert({ user_id: user!.id, focus_work_minutes: work, focus_break_minutes: brk });
-    } finally {
-      setSavingSettings(false);
-    }
+    await supabase.from('user_settings')
+      .upsert({ user_id: user!.id, focus_work_minutes: work, focus_break_minutes: brk });
   };
 
-  const adjustWorkMins = (delta: number) => {
-    const val = Math.min(90, Math.max(5, workMins + delta));
-    setWorkMins(val);
-    if (timerState === 'idle' && phase === 'work') setRemaining(val * 60);
-    saveFocusSettings(val, breakMins);
-  };
-
-  const adjustBreakMins = (delta: number) => {
-    const val = Math.min(30, Math.max(1, breakMins + delta));
-    setBreakMins(val);
-    if (timerState === 'idle' && phase === 'break') setRemaining(val * 60);
-    saveFocusSettings(workMins, val);
+  const selectPreset = (mins: number) => {
+    if (timerState !== 'idle') return;
+    setWorkMins(mins);
+    if (phase === 'work') setRemaining(mins * 60);
+    saveFocusSettings(mins, breakMins);
   };
 
   const totalSec = phase === 'work' ? workMins * 60 : breakMins * 60;
-  const progress = remaining / totalSec;
-  const dashOffset = CIRCUMFERENCE * (1 - progress);
+  const elapsedFraction = 1 - remaining / totalSec;
+  const dotAngle = (-90 + elapsedFraction * 360) * (Math.PI / 180);
+  const center = SIZE / 2;
+  const dotX = center + RADIUS * Math.cos(dotAngle);
+  const dotY = center + RADIUS * Math.sin(dotAngle);
   const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
   const ss = String(remaining % 60).padStart(2, '0');
   const selectedCourse = courses.find(c => c.id === courseId);
   const ringColor = phase === 'work' ? (selectedCourse?.color ?? colors.highlight) : colors.sage;
+  const maxBreakdownMinutes = Math.max(1, ...courseBreakdown.map(c => c.minutes));
+
+  const fmtMinutes = (mins: number) =>
+    mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
 
   return (
     <ScreenContainer contentContainerStyle={st.content}>
-      <Text style={st.heading}>Fokustimer</Text>
-
-      {/* Settings summary / adjustment */}
-      <Pressable onPress={() => setSettingsOpen(o => !o)} disabled={timerState !== 'idle'}>
-        <Text style={st.settingsSummary}>
-          {workMins} min fokus · {breakMins} min paus  {timerState === 'idle' ? '✎' : ''}
-        </Text>
-      </Pressable>
-      {settingsOpen && timerState === 'idle' && (
-        <View style={st.settingsCard}>
-          <View style={st.settingRow}>
-            <Text style={st.settingLabel}>Fokusperiod (min)</Text>
-            <View style={st.timeRow}>
-              <Pressable onPress={() => adjustWorkMins(-5)} style={st.adjBtn} disabled={savingSettings}>
-                <Text style={st.adjTxt}>−</Text>
-              </Pressable>
-              <Text style={st.timeVal}>{workMins}</Text>
-              <Pressable onPress={() => adjustWorkMins(5)} style={st.adjBtn} disabled={savingSettings}>
-                <Text style={st.adjTxt}>+</Text>
-              </Pressable>
-            </View>
-          </View>
-          <View style={st.divider} />
-          <View style={st.settingRow}>
-            <Text style={st.settingLabel}>Pauslängd (min)</Text>
-            <View style={st.timeRow}>
-              <Pressable onPress={() => adjustBreakMins(-1)} style={st.adjBtn} disabled={savingSettings}>
-                <Text style={st.adjTxt}>−</Text>
-              </Pressable>
-              <Text style={st.timeVal}>{breakMins}</Text>
-              <Pressable onPress={() => adjustBreakMins(1)} style={st.adjBtn} disabled={savingSettings}>
-                <Text style={st.adjTxt}>+</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* Phase toggle */}
-      <View style={st.phaseRow}>
-        {(['work', 'break'] as Phase[]).map(p => (
-          <PressableScale
-            key={p}
-            style={[st.phaseBtn, phase === p && st.phaseBtnActive]}
-            onPress={() => {
-              if (timerState !== 'idle') return;
-              setPhase(p);
-              setRemaining(p === 'work' ? workMins * 60 : breakMins * 60);
-            }}
-            disabled={timerState !== 'idle'}
-          >
-            <Text style={[st.phaseTxt, phase === p && st.phaseTxtActive]}>
-              {p === 'work' ? `Fokus ${workMins}m` : `Paus ${breakMins}m`}
-            </Text>
-          </PressableScale>
-        ))}
+      <View style={st.header}>
+        <Text style={st.caption}>POMODORO · {workMins}/{breakMins}</Text>
+        <Text style={st.heading}>Fokus</Text>
       </View>
 
       {/* Ring */}
       <View style={st.ringContainer}>
         <Svg width={SIZE} height={SIZE}>
-          <Circle
-            cx={SIZE / 2} cy={SIZE / 2} r={RADIUS}
-            fill="none" stroke={colors.cardBorder} strokeWidth={STROKE}
-          />
-          <Circle
-            cx={SIZE / 2} cy={SIZE / 2} r={RADIUS}
-            fill="none"
-            stroke={ringColor}
-            strokeWidth={STROKE}
-            strokeDasharray={`${CIRCUMFERENCE} ${CIRCUMFERENCE}`}
-            strokeDashoffset={dashOffset}
-            strokeLinecap="round"
-            transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}
-          />
+          <Circle cx={center} cy={center} r={RADIUS} fill="none" stroke={colors.cardBorder} strokeWidth={STROKE} />
+          <Circle cx={dotX} cy={dotY} r={DOT_RADIUS} fill={ringColor} />
         </Svg>
         <View style={st.ringLabel}>
+          <Text style={st.remainingLabel}>REMAINING</Text>
           <Text style={st.timerText}>{mm}:{ss}</Text>
-          <Text style={st.phaseLabel}>{phase === 'work' ? 'FOKUS' : 'PAUS'}</Text>
+          <Text style={st.phaseLabel}>
+            {phase === 'break' ? 'PAUS' : (selectedCourse?.name.toUpperCase() ?? 'FOKUS')}
+          </Text>
         </View>
       </View>
 
       {/* Controls */}
       <View style={st.controls}>
-        {timerState === 'running' ? (
-          <PressableScale style={st.btn} onPress={handlePause}>
-            <Text style={st.btnTxt}>⏸  Pausa</Text>
-          </PressableScale>
-        ) : (
-          <PressableScale style={st.btn} onPress={handleStart}>
-            <Text style={st.btnTxt}>{timerState === 'paused' ? '▶  Fortsätt' : '▶  Starta'}</Text>
-          </PressableScale>
-        )}
-        {timerState !== 'idle' && (
-          <PressableScale style={st.resetBtn} onPress={handleReset}>
-            <Text style={st.resetTxt}>Återställ</Text>
-          </PressableScale>
-        )}
+        <PressableScale style={st.ctrlBtn} onPress={handleReset}>
+          <RotateCcwIcon size={20} color={colors.ink} />
+        </PressableScale>
+        <PressableScale
+          style={st.ctrlBtnPrimary}
+          onPress={timerState === 'running' ? handlePause : handleStart}
+        >
+          {timerState === 'running'
+            ? <PauseIcon size={20} color={colors.paper} />
+            : <PlayIcon size={20} color={colors.paper} />}
+        </PressableScale>
+        <PressableScale style={st.ctrlBtn} onPress={handleSkip} disabled={timerState === 'idle'}>
+          <SkipForwardIcon size={20} color={timerState === 'idle' ? colors.cardBorder : colors.ink} />
+        </PressableScale>
+      </View>
+
+      {/* Passlängd */}
+      <View style={st.section}>
+        <Text style={st.sectionLbl}>PASSLÄNGD</Text>
+        <View style={st.presetRow}>
+          {PRESETS.map(mins => (
+            <PressableScale
+              key={mins}
+              style={[st.presetPill, workMins === mins && st.presetPillActive]}
+              onPress={() => selectPreset(mins)}
+              disabled={timerState !== 'idle'}
+            >
+              <Text style={[st.presetTxt, workMins === mins && st.presetTxtActive]}>{mins} min</Text>
+            </PressableScale>
+          ))}
+        </View>
       </View>
 
       {/* Course picker */}
       {courses.length > 0 && (
-        <View style={st.courseSection}>
-          <Text style={st.sectionLbl}>KURS (valfritt)</Text>
+        <View style={st.section}>
+          <Text style={st.sectionLbl}>KURS</Text>
           <View style={st.chipRow}>
             <PressableScale
               style={[st.chip, !courseId && st.chipActive]}
@@ -306,13 +289,11 @@ export default function FocusScreen() {
             {courses.map(c => (
               <PressableScale
                 key={c.id}
-                style={[
-                  st.chip,
-                  courseId === c.id && { backgroundColor: c.color, borderColor: c.color },
-                ]}
+                style={[st.chip, courseId === c.id && { borderColor: c.color }]}
                 onPress={() => setCourseId(c.id)}
                 disabled={timerState !== 'idle'}
               >
+                <View style={[st.chipDot, { backgroundColor: c.color }]} />
                 <Text
                   style={[st.chipTxt, courseId === c.id && st.chipTxtActive]}
                   numberOfLines={1}
@@ -327,74 +308,78 @@ export default function FocusScreen() {
 
       {/* Weekly stats */}
       <View style={st.statsBox}>
-        <Text style={st.statsLabel}>FOKUSTID DENNA VECKA</Text>
-        <Text style={st.statsValue}>
-          {weeklyMinutes >= 60
-            ? `${Math.floor(weeklyMinutes / 60)}h ${weeklyMinutes % 60}m`
-            : `${weeklyMinutes}m`}
-        </Text>
+        <Text style={st.statsLabel}>DEN HÄR VECKAN</Text>
+        <Text style={st.statsValue}>{fmtMinutes(weeklyTotalMinutes)}</Text>
+        {courseBreakdown.map(cb => (
+          <View key={cb.id} style={st.breakdownRow}>
+            <View style={st.breakdownHeader}>
+              <Text style={st.breakdownName}>{cb.name}</Text>
+              <Text style={st.breakdownMins}>{cb.minutes} MIN</Text>
+            </View>
+            <AnimatedProgressBar progress={cb.minutes / maxBreakdownMinutes} color={cb.color} />
+          </View>
+        ))}
       </View>
     </ScreenContainer>
   );
 }
 
 const st = StyleSheet.create({
-  content: { alignItems: 'center', paddingTop: spacing.xl, paddingBottom: spacing['2xl'], gap: spacing.lg },
+  content: { alignItems: 'center', paddingTop: spacing.xl, paddingHorizontal: spacing.md, paddingBottom: spacing['2xl'], gap: spacing.lg },
 
+  header: { alignSelf: 'flex-start', gap: 2 },
+  caption: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, letterSpacing: 1.5 },
   heading: { fontFamily: fontFamily.serif, fontSize: fontSize['2xl'], color: colors.ink },
 
-  settingsSummary: { fontFamily: fontFamily.mono, fontSize: fontSize.sm, color: colors.inkMuted },
-  settingsCard: {
-    width: '100%', backgroundColor: colors.cardBg, borderWidth: 1,
-    borderColor: colors.cardBorder, borderRadius: radius.card, overflow: 'hidden',
-  },
-  settingRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    padding: spacing.md, gap: spacing.sm,
-  },
-  settingLabel: { fontFamily: fontFamily.bodySemiBold, fontSize: fontSize.base, color: colors.ink },
-  divider: { height: 1, backgroundColor: colors.cardBorder, marginHorizontal: spacing.md },
-  timeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  timeVal: { fontFamily: fontFamily.mono, fontSize: fontSize.base, color: colors.ink, minWidth: 40, textAlign: 'center' },
-  adjBtn: {
-    width: 32, height: 32, borderRadius: 16,
-    borderWidth: 1, borderColor: colors.cardBorder,
+  ringContainer: { position: 'relative', alignItems: 'center', justifyContent: 'center' },
+  ringLabel: { position: 'absolute', alignItems: 'center', gap: 2 },
+  remainingLabel: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, letterSpacing: 2 },
+  timerText: { fontFamily: fontFamily.mono, fontSize: fontSize['3xl'], color: colors.ink },
+  phaseLabel: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, letterSpacing: 1 },
+
+  controls: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
+  ctrlBtn: {
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: colors.cardBg, borderWidth: 1, borderColor: colors.cardBorder,
     alignItems: 'center', justifyContent: 'center',
   },
-  adjTxt: { fontFamily: fontFamily.bodySemiBold, fontSize: fontSize.base, color: colors.ink },
+  ctrlBtnPrimary: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: colors.ink,
+    alignItems: 'center', justifyContent: 'center',
+  },
 
-  phaseRow: { flexDirection: 'row', gap: spacing.sm },
-  phaseBtn: {
-    paddingVertical: spacing.sm, paddingHorizontal: spacing.lg,
+  section: { width: '100%', gap: spacing.sm },
+  sectionLbl: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, letterSpacing: 1.5 },
+
+  presetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+  presetPill: {
+    paddingVertical: spacing.sm, paddingHorizontal: spacing.md,
     borderRadius: 20, borderWidth: 1, borderColor: colors.cardBorder, backgroundColor: colors.cardBg,
   },
-  phaseBtnActive: { backgroundColor: colors.ink, borderColor: colors.ink },
-  phaseTxt: { fontFamily: fontFamily.mono, fontSize: fontSize.sm, color: colors.inkMuted },
-  phaseTxtActive: { color: colors.paper },
+  presetPillActive: { backgroundColor: colors.ink, borderColor: colors.ink },
+  presetTxt: { fontFamily: fontFamily.body, fontSize: fontSize.sm, color: colors.ink },
+  presetTxtActive: { color: colors.paper },
 
-  ringContainer: { position: 'relative', alignItems: 'center', justifyContent: 'center' },
-  ringLabel: { position: 'absolute', alignItems: 'center', gap: spacing.xs },
-  timerText: { fontFamily: fontFamily.mono, fontSize: fontSize['3xl'], color: colors.ink },
-  phaseLabel: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, letterSpacing: 2 },
-
-  controls: { gap: spacing.sm, width: '70%' },
-  btn: { backgroundColor: colors.ink, padding: spacing.md, borderRadius: radius.button, alignItems: 'center' },
-  btnTxt: { fontFamily: fontFamily.bodySemiBold, fontSize: fontSize.lg, color: colors.paper },
-  resetBtn: { alignItems: 'center', padding: spacing.sm },
-  resetTxt: { fontFamily: fontFamily.body, fontSize: fontSize.sm, color: colors.inkMuted, textDecorationLine: 'underline' },
-
-  courseSection: { width: '100%', paddingHorizontal: spacing.md, gap: spacing.sm, alignItems: 'flex-start' },
-  sectionLbl: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, letterSpacing: 1.5 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingVertical: spacing.xs, paddingHorizontal: spacing.sm,
     borderRadius: 20, borderWidth: 1, borderColor: colors.cardBorder, backgroundColor: colors.cardBg,
   },
-  chipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
+  chipActive: { borderColor: colors.ink },
+  chipDot: { width: 8, height: 8, borderRadius: 4 },
   chipTxt: { fontFamily: fontFamily.body, fontSize: fontSize.sm, color: colors.inkMuted },
-  chipTxtActive: { color: colors.paper },
+  chipTxtActive: { color: colors.ink, fontFamily: fontFamily.bodySemiBold },
 
-  statsBox: { alignItems: 'center', gap: spacing.xs },
+  statsBox: {
+    width: '100%', backgroundColor: colors.cardBg, borderWidth: 1, borderColor: colors.cardBorder,
+    borderRadius: radius.card, padding: spacing.md, gap: spacing.sm,
+  },
   statsLabel: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, letterSpacing: 1.5 },
   statsValue: { fontFamily: fontFamily.serif, fontSize: fontSize.xl, color: colors.ink },
+  breakdownRow: { gap: 4, marginTop: spacing.xs },
+  breakdownHeader: { flexDirection: 'row', justifyContent: 'space-between' },
+  breakdownName: { fontFamily: fontFamily.body, fontSize: fontSize.sm, color: colors.ink },
+  breakdownMins: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted },
 });

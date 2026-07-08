@@ -5,7 +5,6 @@ import {
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import Svg, { Circle, Path } from 'react-native-svg';
 import Animated from 'react-native-reanimated';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
@@ -18,17 +17,20 @@ import { StaggerIn } from '../../components/StaggerIn';
 import { AnimatedCheck } from '../../components/AnimatedCheck';
 import { ScreenContainer } from '../../components/ScreenContainer';
 import { useStreakPulse } from '../../hooks/useStreakPulse';
+import { BoltIcon } from '../../components/icons/BoltIcon';
+import { PlayIcon } from '../../components/icons/PlayIcon';
+import { ArrowRightIcon } from '../../components/icons/ArrowRightIcon';
+import { StackIcon } from '../../components/icons/StackIcon';
+import { ChevronRightIcon } from '../../components/icons/ChevronRightIcon';
 import { colors, fontFamily, fontSize, spacing, radius } from '../../theme/tokens';
 
 type DueCourse = { courseId: string; courseName: string; dueCount: number };
 
-const MONTH_NAMES = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
-const DAY_NAMES = ['Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör', 'Sön'];
-
-const FOCUS_RING_SIZE = 48;
-const FOCUS_RING_STROKE = 5;
-const FOCUS_RING_RADIUS = (FOCUS_RING_SIZE - FOCUS_RING_STROKE) / 2;
-const FOCUS_RING_CIRC = 2 * Math.PI * FOCUS_RING_RADIUS;
+const DAY_NAMES_FULL = ['Måndag', 'Tisdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lördag', 'Söndag'];
+const MONTH_NAMES_FULL = [
+  'januari', 'februari', 'mars', 'april', 'maj', 'juni',
+  'juli', 'augusti', 'september', 'oktober', 'november', 'december',
+];
 
 export default function HomeScreen() {
   const { user } = useAuth();
@@ -41,7 +43,6 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [focusWorkMins, setFocusWorkMins] = useState(25);
   const [focusBreakMins, setFocusBreakMins] = useState(5);
-  const [weeklyFocusMinutes, setWeeklyFocusMinutes] = useState(0);
 
   const today = new Date();
   const monday = mondayOf(today);
@@ -62,7 +63,6 @@ export default function HomeScreen() {
       { data: courses },
       streakDays,
       { data: focusSettings },
-      { data: focusSessions },
     ] = await Promise.all([
       supabase.from('flashcards')
         .select('id, course_id')
@@ -73,8 +73,6 @@ export default function HomeScreen() {
       supabase.from('user_settings')
         .select('focus_work_minutes, focus_break_minutes')
         .eq('user_id', user!.id).maybeSingle(),
-      supabase.from('focus_sessions').select('minutes')
-        .eq('user_id', user!.id).gte('completed_at', new Date(Date.now() - 7 * 86400000).toISOString()),
       fetchRange(weekMonday, weekSunday),
     ]);
 
@@ -82,7 +80,6 @@ export default function HomeScreen() {
       setFocusWorkMins(focusSettings.focus_work_minutes);
       setFocusBreakMins(focusSettings.focus_break_minutes);
     }
-    setWeeklyFocusMinutes((focusSessions ?? []).reduce((sum, r) => sum + r.minutes, 0));
 
     // Group due cards by course
     const courseMap = new Map<string, { name: string; count: number }>();
@@ -118,10 +115,6 @@ export default function HomeScreen() {
 
   const streakPulseStyle = useStreakPulse(streak);
 
-  const focusWeeklyGoal = focusWorkMins * 5;
-  const focusProgress = Math.min(1, weeklyFocusMinutes / focusWeeklyGoal);
-  const focusDashOffset = FOCUS_RING_CIRC * (1 - focusProgress);
-
   const navigateToFocus = () => {
     (navigation as any).navigate('Fokus');
   };
@@ -132,7 +125,7 @@ export default function HomeScreen() {
 
   const dateLabel = () => {
     const d = new Date();
-    return `${DAY_NAMES[(d.getDay() + 6) % 7]} ${d.getDate()} ${MONTH_NAMES[d.getMonth()]}`;
+    return `${DAY_NAMES_FULL[(d.getDay() + 6) % 7]} ${d.getDate()} ${MONTH_NAMES_FULL[d.getMonth()]}`.toUpperCase();
   };
 
   if (loading || plansLoading) {
@@ -153,68 +146,76 @@ export default function HomeScreen() {
     >
       {/* Header */}
       <View style={s.header}>
-        <Text style={s.heading}>Idag</Text>
         <Text style={s.dateLbl}>{dateLabel()}</Text>
-        {streak > 0 && (
-          <Animated.View style={[s.streakBadge, streakPulseStyle]}>
-            <Text style={s.streakTxt}>{streak} {streak === 1 ? 'dag' : 'dagar'} i rad</Text>
-          </Animated.View>
-        )}
+        <View style={s.headingRow}>
+          <Text style={s.heading}>Idag</Text>
+          {streak > 0 && (
+            <Animated.View style={[s.streakBadge, streakPulseStyle]}>
+              <BoltIcon size={13} color={colors.ink} />
+              <Text style={s.streakTxt}>{streak} {streak === 1 ? 'dag' : 'dagar'}</Text>
+            </Animated.View>
+          )}
+        </View>
       </View>
+
+      {/* Weekly progress */}
+      {weeklyTotal > 0 && (
+        <View style={s.section}>
+          <View style={s.sectionRow}>
+            <Text style={s.sectionLbl}>VECKANS PASS</Text>
+            <Text style={s.weekFraction}>{weeklyDone}/{weeklyTotal}</Text>
+          </View>
+          <View style={s.segmentRow}>
+            {Array.from({ length: weeklyTotal }, (_, i) => (
+              <StaggerIn key={i} index={i} style={{ flex: 1 }}>
+                <View style={[s.segment, i < weeklyDone && s.segmentFilled]} />
+              </StaggerIn>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {/* Quick focus */}
+      <PressableScale style={s.focusBtn} onPress={navigateToFocus}>
+        <View style={s.focusRing}>
+          <PlayIcon size={16} color={colors.highlight} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.focusCaption}>SNABBSTART</Text>
+          <Text style={s.focusBtnTxt}>{focusWorkMins} min fokuspass</Text>
+          <Text style={s.focusBtnSub}>Tryck för att starta timern</Text>
+        </View>
+        <View style={s.focusArrowBtn}>
+          <ArrowRightIcon size={16} color={colors.ink} />
+        </View>
+      </PressableScale>
 
       {/* Due flashcards per course */}
       {dueCourses.length > 0 && (
         <View style={s.section}>
-          <Text style={s.sectionLbl}>ATT REPETERA</Text>
           {dueCourses.map(dc => (
             <PressableScale
               key={dc.courseId}
               style={s.dueCard}
               onPress={() => navigation.navigate('Review', { courseId: dc.courseId, courseName: dc.courseName })}
             >
-              <View style={{ flex: 1 }}>
-                <Text style={s.dueCourseName}>{dc.courseName}</Text>
-                <Text style={s.dueCnt}>{dc.dueCount} kort att repetera</Text>
+              <View style={s.dueIconBox}>
+                <StackIcon size={18} color={colors.ink} />
               </View>
-              <Text style={s.dueArrow}>→</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={s.dueTitle}>{dc.dueCount} kort att repetera</Text>
+                <Text style={s.dueSub}>{dc.courseName.toUpperCase()} · SM-2</Text>
+              </View>
+              <ChevronRightIcon size={18} color={colors.inkMuted} />
             </PressableScale>
           ))}
         </View>
       )}
 
-      {/* Quick focus */}
-      <PressableScale style={s.focusBtn} onPress={navigateToFocus}>
-        <View style={s.focusRingWrap}>
-          <Svg width={FOCUS_RING_SIZE} height={FOCUS_RING_SIZE}>
-            <Circle
-              cx={FOCUS_RING_SIZE / 2} cy={FOCUS_RING_SIZE / 2} r={FOCUS_RING_RADIUS}
-              fill="none" stroke="rgba(247,245,240,0.2)" strokeWidth={FOCUS_RING_STROKE}
-            />
-            <Circle
-              cx={FOCUS_RING_SIZE / 2} cy={FOCUS_RING_SIZE / 2} r={FOCUS_RING_RADIUS}
-              fill="none" stroke={colors.highlight} strokeWidth={FOCUS_RING_STROKE}
-              strokeDasharray={`${FOCUS_RING_CIRC} ${FOCUS_RING_CIRC}`}
-              strokeDashoffset={focusDashOffset}
-              strokeLinecap="round"
-              transform={`rotate(-90 ${FOCUS_RING_SIZE / 2} ${FOCUS_RING_SIZE / 2})`}
-            />
-          </Svg>
-          <View style={s.focusPlayWrap}>
-            <Svg width={14} height={14} viewBox="0 0 24 24">
-              <Path d="M8 5v14l11-7z" fill={colors.highlight} />
-            </Svg>
-          </View>
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={s.focusBtnTxt}>Starta fokustimer</Text>
-          <Text style={s.focusBtnSub}>{focusWorkMins} min fokus · {focusBreakMins} min paus</Text>
-        </View>
-      </PressableScale>
-
       {/* Today's plans */}
       <View style={s.section}>
         <View style={s.sectionRow}>
-          <Text style={s.sectionLbl}>STUDIEPASS IDAG</Text>
+          <Text style={s.sectionLbl}>DAGENS PASS</Text>
           <TouchableOpacity onPress={navigateToPlan}>
             <Text style={s.sectionLink}>+ Nytt pass</Text>
           </TouchableOpacity>
@@ -252,21 +253,6 @@ export default function HomeScreen() {
           })
         )}
       </View>
-
-      {/* Weekly progress */}
-      {weeklyTotal > 0 && (
-        <View style={s.section}>
-          <Text style={s.sectionLbl}>VECKANS PASS</Text>
-          <Text style={s.weeklyNum}>{weeklyDone} av {weeklyTotal} klara</Text>
-          <View style={s.segmentRow}>
-            {Array.from({ length: weeklyTotal }, (_, i) => (
-              <StaggerIn key={i} index={i} style={{ flex: 1 }}>
-                <View style={[s.segment, i < weeklyDone && s.segmentFilled]} />
-              </StaggerIn>
-            ))}
-          </View>
-        </View>
-      )}
     </ScreenContainer>
   );
 }
@@ -276,43 +262,57 @@ const s = StyleSheet.create({
   center: { flex: 1, backgroundColor: colors.paper, justifyContent: 'center', alignItems: 'center' },
 
   header: { paddingTop: spacing.xl, gap: spacing.xs },
+  dateLbl: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, letterSpacing: 1.5 },
+  headingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   heading: { fontFamily: fontFamily.serif, fontSize: fontSize['2xl'], color: colors.ink },
-  dateLbl: { fontFamily: fontFamily.mono, fontSize: fontSize.sm, color: colors.inkMuted },
   streakBadge: {
-    alignSelf: 'flex-start', backgroundColor: 'transparent',
-    borderWidth: 1, borderColor: colors.ink,
-    paddingVertical: 2, paddingHorizontal: spacing.sm, borderRadius: 20, marginTop: spacing.xs,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: colors.highlight,
+    paddingVertical: 5, paddingHorizontal: spacing.sm, borderRadius: 20,
   },
-  streakTxt: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.ink },
+  streakTxt: { fontFamily: fontFamily.monoMedium, fontSize: fontSize.xs, color: colors.ink },
 
   section: { gap: spacing.sm },
   sectionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   sectionLbl: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, letterSpacing: 1.5 },
   sectionLink: { fontFamily: fontFamily.bodySemiBold, fontSize: fontSize.sm, color: colors.ink },
 
+  weekFraction: { fontFamily: fontFamily.mono, fontSize: fontSize.sm, color: colors.ink },
+  segmentRow: { flexDirection: 'row', gap: spacing.xs },
+  segment: { height: 6, borderRadius: 3, backgroundColor: colors.cardBorder },
+  segmentFilled: { backgroundColor: colors.ink },
+
   dueCard: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: colors.ink, borderRadius: radius.card,
+    backgroundColor: colors.cardBg, borderRadius: radius.card,
+    borderWidth: 1, borderColor: colors.cardBorder,
     padding: spacing.md, gap: spacing.sm,
   },
-  dueCourseName: { fontFamily: fontFamily.bodySemiBold, fontSize: fontSize.base, color: colors.paper },
-  dueCnt: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.cardBorder, marginTop: 2 },
-  dueArrow: { fontSize: fontSize.xl, color: colors.paper },
+  dueIconBox: {
+    width: 40, height: 40, borderRadius: 10,
+    backgroundColor: colors.paper,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  dueTitle: { fontFamily: fontFamily.serifRegular, fontSize: fontSize.lg, color: colors.ink },
+  dueSub: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, marginTop: 2, letterSpacing: 0.5 },
 
   focusBtn: {
     flexDirection: 'row', backgroundColor: colors.ink, borderRadius: radius.card,
     padding: spacing.md, alignItems: 'center', gap: spacing.md,
   },
-  focusRingWrap: {
-    width: FOCUS_RING_SIZE, height: FOCUS_RING_SIZE,
+  focusRing: {
+    width: 48, height: 48, borderRadius: 24,
+    borderWidth: 2, borderColor: colors.highlight,
     alignItems: 'center', justifyContent: 'center',
   },
-  focusPlayWrap: {
-    position: 'absolute', alignItems: 'center', justifyContent: 'center',
-    marginLeft: 2,
-  },
-  focusBtnTxt: { fontFamily: fontFamily.bodySemiBold, fontSize: fontSize.base, color: colors.paper },
+  focusCaption: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: 'rgba(247,245,240,0.6)', letterSpacing: 1.5 },
+  focusBtnTxt: { fontFamily: fontFamily.serifRegular, fontSize: fontSize.lg, color: colors.paper, marginTop: 2 },
   focusBtnSub: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: 'rgba(247,245,240,0.7)', marginTop: 2 },
+  focusArrowBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: colors.paper,
+    alignItems: 'center', justifyContent: 'center',
+  },
 
   emptyTxt: { fontFamily: fontFamily.body, fontSize: fontSize.sm, color: colors.inkMuted },
 
@@ -332,9 +332,4 @@ const s = StyleSheet.create({
   planTitle: { fontFamily: fontFamily.bodySemiBold, fontSize: fontSize.base, color: colors.ink },
   planTitleDone: { color: colors.inkMuted },
   planMeta: { fontFamily: fontFamily.mono, fontSize: fontSize.xs, color: colors.inkMuted, marginTop: 2 },
-
-  weeklyNum: { fontFamily: fontFamily.mono, fontSize: fontSize.lg, color: colors.ink },
-  segmentRow: { flexDirection: 'row', gap: spacing.xs },
-  segment: { height: 6, borderRadius: 3, backgroundColor: colors.cardBorder },
-  segmentFilled: { backgroundColor: colors.sage },
 });
